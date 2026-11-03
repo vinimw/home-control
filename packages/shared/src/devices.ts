@@ -3,27 +3,32 @@
  * absent: they stay on the server and are never part of any public contract.
  */
 
-export type DeviceType =
-  | 'light'
-  | 'switch'
-  | 'tv'
-  | 'speaker'
-  | 'media_player'
-  | 'climate'
-  | 'cover'
-  | 'fan'
-  | 'scene'
-  | 'script'
-  | 'button'
-  | 'sensor'
-  | 'binary_sensor';
+export const DEVICE_TYPES = [
+  'light',
+  'switch',
+  'tv',
+  'speaker',
+  'media_player',
+  'climate',
+  'cover',
+  'fan',
+  'scene',
+  'script',
+  'button',
+  'sensor',
+  'binary_sensor',
+] as const;
+
+export type DeviceType = (typeof DEVICE_TYPES)[number];
 
 /**
  * - `available`: the device reported a usable state.
  * - `unavailable`: the provider says the device cannot be reached (offline, unplugged).
  * - `unknown`: the device exists but has not reported a state yet.
  */
-export type DeviceAvailability = 'available' | 'unavailable' | 'unknown';
+export const DEVICE_AVAILABILITIES = ['available', 'unavailable', 'unknown'] as const;
+
+export type DeviceAvailability = (typeof DEVICE_AVAILABILITIES)[number];
 
 export type DeviceCapability =
   | 'power'

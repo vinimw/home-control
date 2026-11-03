@@ -18,6 +18,7 @@ const app = buildServer({
   logLevel: config.logLevel,
   homeAssistant: config.homeAssistant,
   deviceRefreshIntervalMs: config.deviceRefreshIntervalMs,
+  deviceActions: { enabled: config.deviceActionsEnabled },
 });
 
 app.log.info(

@@ -2,8 +2,8 @@
 
 `apps/api/src/devices/` turns Home Assistant entities into a **canonical device model**
 (`packages/shared/src/devices.ts`) so the UI and the command layer never depend on Home Assistant
-details. It is an in-process module (`app.devices`); the HTTP devices API and command dispatch come with
-the next tasks and will need authentication first.
+details. It is an in-process module (`app.devices`). The HTTP endpoints and action execution are
+documented in [DEVICES_API.md](DEVICES_API.md).
 
 ## Canonical device
 
@@ -87,7 +87,7 @@ The registry commands are only available to **administrator** users. With a non-
 still works but in `states_only` mode: no rooms or manufacturers, and hidden/diagnostic entities cannot
 be filtered. Create the long-lived token with an administrator account (see `HOME_ASSISTANT.md`).
 
-`GET /ha/status` includes a `devices` summary (counters, `enrichment`, `lastError`) and no device data.
+`GET /devices` returns the devices; `GET /ha/status` includes a `devices` summary (counters, `enrichment`, `lastError`) and no device data.
 
 ## Limitations
 

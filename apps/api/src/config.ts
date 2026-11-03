@@ -36,6 +36,10 @@ const schema = z
       .min(1000, 'must be between 1000 and 60000')
       .max(60_000, 'must be between 1000 and 60000')
       .default(10_000),
+    DEVICE_ACTIONS_ENABLED: z
+      .enum(['true', 'false', '1', '0'], { message: 'must be true or false' })
+      .default('false')
+      .transform((value) => value === 'true' || value === '1'),
     DEVICE_REFRESH_INTERVAL_MS: z.coerce
       .number({ message: 'must be a number' })
       .int('must be an integer')
@@ -66,6 +70,7 @@ export interface AppConfig {
   logLevel: string;
   dataDir: string;
   deviceRefreshIntervalMs: number;
+  deviceActionsEnabled: boolean;
   homeAssistant: { url: string; token: string; timeoutMs: number } | null;
 }
 
@@ -110,6 +115,7 @@ export function loadConfig(
     logLevel: parsed.LOG_LEVEL,
     dataDir: resolve(parsed.DATA_DIR),
     deviceRefreshIntervalMs: parsed.DEVICE_REFRESH_INTERVAL_MS,
+    deviceActionsEnabled: parsed.DEVICE_ACTIONS_ENABLED,
     homeAssistant:
       url && token
         ? { url: url.replace(/\/+$/, ''), token, timeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS }
