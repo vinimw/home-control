@@ -36,6 +36,12 @@ const schema = z
       .min(1000, 'must be between 1000 and 60000')
       .max(60_000, 'must be between 1000 and 60000')
       .default(10_000),
+    DEVICE_REFRESH_INTERVAL_MS: z.coerce
+      .number({ message: 'must be a number' })
+      .int('must be an integer')
+      .min(5000, 'must be between 5000 and 3600000')
+      .max(3_600_000, 'must be between 5000 and 3600000')
+      .default(300_000),
   })
   .superRefine((env, ctx) => {
     if (env.HOME_ASSISTANT_URL && !env.HOME_ASSISTANT_TOKEN) {
@@ -59,6 +65,7 @@ export interface AppConfig {
   port: number;
   logLevel: string;
   dataDir: string;
+  deviceRefreshIntervalMs: number;
   homeAssistant: { url: string; token: string; timeoutMs: number } | null;
 }
 
@@ -102,6 +109,7 @@ export function loadConfig(
     port: parsed.API_PORT,
     logLevel: parsed.LOG_LEVEL,
     dataDir: resolve(parsed.DATA_DIR),
+    deviceRefreshIntervalMs: parsed.DEVICE_REFRESH_INTERVAL_MS,
     homeAssistant:
       url && token
         ? { url: url.replace(/\/+$/, ''), token, timeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS }

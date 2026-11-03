@@ -1,18 +1,21 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { API_HEALTH_PATH, type ApiErrorBody, type HealthResponse } from '@home-control/shared';
 import { HTTP_STATUS_BY_CODE, HomeAssistantError } from './homeassistant/errors.js';
+import { DeviceRegistry } from './devices/registry.js';
 import { HomeAssistantService, type HomeAssistantSettings } from './homeassistant/service.js';
 import { registerHomeAssistantRoutes } from './routes/homeassistant.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     homeAssistant: HomeAssistantService;
+    devices: DeviceRegistry;
   }
 }
 
 export interface ServerOptions {
   logLevel?: string;
   homeAssistant?: HomeAssistantSettings | null;
+  deviceRefreshIntervalMs?: number;
 }
 
 export function buildServer(options: ServerOptions = {}): FastifyInstance {
@@ -34,7 +37,18 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   });
 
   app.decorate('homeAssistant', new HomeAssistantService(options.homeAssistant ?? null, app.log));
-  app.addHook('onClose', async () => app.homeAssistant.stop());
+  app.decorate(
+    'devices',
+    new DeviceRegistry({
+      service: app.homeAssistant,
+      logger: app.log,
+      refreshIntervalMs: options.deviceRefreshIntervalMs ?? 300_000,
+    }),
+  );
+  app.addHook('onClose', async () => {
+    app.devices.stop();
+    app.homeAssistant.stop();
+  });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof HomeAssistantError) {
