@@ -46,6 +46,7 @@ export function registerRoomRoutes(app: FastifyInstance): void {
     try {
       const room = rooms.update(request.params.id, change);
       if (!room) throw notFound();
+      app.deviceEvents.resync('rooms');
       return room;
     } catch (error) {
       if (error instanceof DuplicateRoomError) throw new ApiError('conflict', error.message);
@@ -55,6 +56,7 @@ export function registerRoomRoutes(app: FastifyInstance): void {
 
   app.delete<{ Params: { id: string } }>(`${API_ROOMS_PATH}/:id`, async (request, reply) => {
     if (!ROOM_ID.test(request.params.id) || !rooms.delete(request.params.id)) throw notFound();
+    app.deviceEvents.resync('rooms');
     return reply.status(204).send();
   });
 }

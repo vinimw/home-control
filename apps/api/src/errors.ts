@@ -23,6 +23,7 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   actions_disabled: 403,
   not_found: 404,
   conflict: 409,
+  too_many_requests: 429,
   device_unavailable: 409,
   unsupported_action: 422,
   invalid_params: 422,

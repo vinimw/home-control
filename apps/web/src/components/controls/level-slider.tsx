@@ -44,9 +44,7 @@ export function LevelSlider({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between text-sm">
-        <span className="font-medium" id={`${command}-label`}>
-          {label}
-        </span>
+        <span className="font-medium">{label}</span>
         <span className="text-muted-foreground tabular-nums">
           {value === null && draft === null ? '—' : `${shown}${unit}`}
         </span>

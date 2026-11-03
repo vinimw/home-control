@@ -11,7 +11,7 @@ shadcn-style primitives (class-variance-authority + tailwind-merge + Radix) writ
   Zoom is never disabled.
 - Landmarks (`header`, `nav`, `main`), a **skip link**, `aria-current` on the active item and visible focus
   rings everywhere. Motion is reduced under `prefers-reduced-motion`.
-- Routes: `/` (system status), `/devices`, `/scenes`, `/settings`, `/design` (component library).
+- Routes: `/` (system status), `/devices` (live dashboard), `/scenes`, `/settings`, `/design` (component library).
   Areas that are not built yet show an honest empty state, never fake data.
 
 ## Theming
@@ -58,8 +58,37 @@ components, so screens built from them cannot get it wrong by accident:
 6. **The status page shows real data** read from the API. If the API cannot be reached, everything is shown
    as `Indisponível` / `Desconhecido` / `—`, never as OK.
 
-Controls receive an `ExecuteCommand` function (`(command, params) => Promise<DeviceActionResult>`). Wiring
-it to the API (for example through a server-side proxy) belongs to the screens that use the controls.
+Controls receive an `ExecuteCommand` function (`(command, params) => Promise<DeviceActionResult>`). The
+devices dashboard wires it to the API through the relay described below.
+
+## Devices dashboard (`/devices`)
+
+`components/devices/` renders the devices from the API, grouped by room, with category filters (lights, TV and
+audio, climate, scenes, sensors), a room filter and favorites.
+
+**Data flow.** The page loads the list on the server (first paint already has real data) and the browser then
+keeps it live:
+
+1. `GET /api/devices` (list) and `GET /api/devices/events` (Server-Sent Events) are served by this app and
+   relayed to the API. The browser never talks to the API directly and `API_INTERNAL_URL` never reaches it.
+   Only the fixed routes under `app/api/devices` exist (list, events, `:id/actions`, `:id/settings`); the
+   relay validates the device id, limits the body to 16 KB and exposes no other API path.
+2. `useDevices` loads the list, opens the stream and, on every (re)connection, reloads the list before
+   trusting events. A list response never overwrites a device that changed after the request started.
+3. If the stream drops the badge says **Reconectando...**, a banner explains it and the list is polled every
+   10 s until the stream is back (every 60 s while live, as a safety net). **Atualizar** forces a reload.
+4. If the API cannot be reached, the data on screen is marked as possibly out of date (with the time of the
+   last good update); with no data at all an error state offers a retry. Nothing is shown as fresh when it
+   is not.
+
+**Controls come from the device's real commands.** `DeviceTile` renders a switch only if the device offers
+`turn_on`+`turn_off`, a brightness/volume slider only for `set_brightness`/`set_volume`, and so on. Everything
+else the device reports (sensor readings, temperature, position, source) is read-only text. The honesty
+contract above still applies: a switch moves only when the device's new state arrives (through the stream, or
+from the server's view returned in the action result), never because it was clicked.
+
+States covered: loading, API unreachable, Home Assistant not connected, no devices, no match for the filters,
+and per device: available / unavailable (controls hidden or disabled) / no reading.
 
 ## Adding a component
 

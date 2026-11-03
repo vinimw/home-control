@@ -1,6 +1,8 @@
 import {
   API_HA_STATUS_PATH,
+  API_DEVICES_PATH,
   API_HEALTH_PATH,
+  type DeviceListResponse,
   type HealthResponse,
   type HomeAssistantStatusResponse,
 } from '@home-control/shared';
@@ -17,6 +19,11 @@ async function getJson<T>(path: string): Promise<T | null> {
     // Unreachable, timed out or invalid JSON: reported as "unknown", never as a fake value.
     return null;
   }
+}
+
+/** Server-side only: the initial device list, or `null` when the API cannot be reached. */
+export function getDevices(): Promise<DeviceListResponse | null> {
+  return getJson<DeviceListResponse>(API_DEVICES_PATH);
 }
 
 export interface SystemStatus {

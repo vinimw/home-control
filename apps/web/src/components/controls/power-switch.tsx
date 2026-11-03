@@ -12,13 +12,15 @@ interface PowerSwitchProps {
   checked: boolean | null;
   onCommand: ExecuteCommand;
   disabled?: boolean;
+  /** Command sent when toggled. Defaults to `turn_on` / `turn_off` (use it for e.g. `set_mute`). */
+  commandFor?: (next: boolean) => { command: string; params?: Record<string, unknown> };
 }
 
 /**
  * On/off control. It is fully controlled: toggling sends the command and shows "Enviando…", but the
  * switch only changes when the parent passes the device's new reported state.
  */
-export function PowerSwitch({ label, checked, onCommand, disabled }: PowerSwitchProps) {
+export function PowerSwitch({ label, checked, onCommand, disabled, commandFor }: PowerSwitchProps) {
   const id = useId();
   const { state, run, pending } = useDeviceCommand(onCommand);
   const isDisabled = useControlDisabled(disabled) || pending;
@@ -39,7 +41,12 @@ export function PowerSwitch({ label, checked, onCommand, disabled }: PowerSwitch
           checked={checked === true}
           disabled={isDisabled}
           aria-busy={pending}
-          onCheckedChange={(next) => void run(next ? 'turn_on' : 'turn_off')}
+          onCheckedChange={(next) => {
+            const { command, params } = commandFor
+              ? commandFor(next)
+              : { command: next ? 'turn_on' : 'turn_off', params: undefined };
+            void run(command, params);
+          }}
         />
       </div>
       <ControlStatus state={state} />

@@ -14,6 +14,7 @@ export type ApiErrorCode =
   | 'device_unavailable'
   | 'actions_disabled'
   | 'conflict'
+  | 'too_many_requests'
   | 'internal_error';
 
 export interface ApiErrorPayload {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import {
+  API_DEVICE_EVENTS_PATH,
   API_DEVICES_PATH,
   DEVICE_AVAILABILITIES,
   DEVICE_TYPES,
@@ -40,7 +41,66 @@ const settingsBody = z
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: 'provide at least one field' });
 
+const MAX_STREAMS = 50;
+const HEARTBEAT_MS = 15_000;
+/** A client that stops reading must not make the API buffer without limit. */
+const MAX_BUFFERED_BYTES = 1024 * 1024;
+
 export function registerDeviceRoutes(app: FastifyInstance): void {
+  const streams = new Set<() => void>(); // each entry closes one open stream
+  app.addHook('onClose', async () => {
+    for (const close of [...streams]) close();
+  });
+
+  /** Server-Sent Events: live device changes. Registered before `/devices/:id` so `events` is not read as an id. */
+  app.get(API_DEVICE_EVENTS_PATH, (request, reply) => {
+    if (streams.size >= MAX_STREAMS) {
+      throw new ApiError('too_many_requests', 'Too many open event streams');
+    }
+
+    reply.hijack();
+    const { raw } = reply;
+    raw.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+      // Tell reverse proxies (nginx) not to buffer the stream.
+      'x-accel-buffering': 'no',
+    });
+
+    let unsubscribe = () => {};
+    let heartbeat: NodeJS.Timeout | null = null;
+    const close = (): void => {
+      if (heartbeat) clearInterval(heartbeat);
+      heartbeat = null;
+      unsubscribe();
+      streams.delete(close);
+      if (!raw.destroyed && !raw.writableEnded) raw.end();
+    };
+    const send = (event: string, data: unknown): void => {
+      if (raw.destroyed || raw.writableEnded) return;
+      if (raw.writableLength > MAX_BUFFERED_BYTES) {
+        close();
+        return;
+      }
+      raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    streams.add(close);
+    // Tells the browser to wait 3 s before reconnecting, then announces the stream.
+    raw.write('retry: 3000\n\n');
+    send('ready', { serverTime: new Date().toISOString() });
+    unsubscribe = app.deviceEvents.subscribe((message) => send(message.event, message.data));
+    // Comment lines keep idle connections alive through proxies and let the client notice a dead link.
+    heartbeat = setInterval(() => {
+      if (!raw.destroyed && !raw.writableEnded) raw.write(': ping\n\n');
+    }, HEARTBEAT_MS);
+    heartbeat.unref();
+
+    request.raw.on('close', close);
+    raw.on('error', close);
+  });
+
   app.get<{ Reply: DeviceListResponse }>(API_DEVICES_PATH, async (request) => {
     const parsed = listQuery.safeParse(request.query);
     if (!parsed.success) {
@@ -85,6 +145,7 @@ export function registerDeviceRoutes(app: FastifyInstance): void {
         throw new ApiError('invalid_params', 'The room does not exist');
       }
       app.storage.deviceSettings.update(id, change);
+      app.deviceEvents.device(id);
       return app.catalog.get(id)!;
     },
   );

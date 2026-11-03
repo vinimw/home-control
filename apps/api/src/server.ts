@@ -3,6 +3,7 @@ import { API_HEALTH_PATH, type ApiErrorBody, type HealthResponse } from '@home-c
 import { ApiError, HTTP_STATUS_BY_CODE } from './errors.js';
 import { DeviceActionService } from './devices/actions/service.js';
 import { DeviceCatalog } from './devices/catalog.js';
+import { DeviceEventHub } from './devices/events.js';
 import { DeviceRegistry } from './devices/registry.js';
 import { HomeAssistantService, type HomeAssistantSettings } from './homeassistant/service.js';
 import { registerDeviceRoutes } from './routes/devices.js';
@@ -17,6 +18,7 @@ declare module 'fastify' {
     storage: Storage;
     devices: DeviceRegistry;
     catalog: DeviceCatalog;
+    deviceEvents: DeviceEventHub;
     deviceActions: DeviceActionService;
   }
 }
@@ -60,6 +62,9 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     }),
   );
   app.decorate('catalog', new DeviceCatalog(app.devices, app.storage));
+  app.decorate('deviceEvents', new DeviceEventHub((id) => app.catalog.get(id)));
+  app.devices.onChange((id) => app.deviceEvents.device(id));
+  app.devices.onResync((reason) => app.deviceEvents.resync(reason));
   app.decorate(
     'deviceActions',
     new DeviceActionService({

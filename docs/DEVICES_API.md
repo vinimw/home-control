@@ -14,6 +14,7 @@ never see Home Assistant entity ids and never choose a Home Assistant service.
 | Method | Path                   | Description                                              |
 | ------ | ---------------------- | -------------------------------------------------------- |
 | GET    | `/devices`             | List devices. Filters: `type`, `availability`, `roomId`. |
+| GET    | `/devices/events`      | Realtime stream of device changes (Server-Sent Events).  |
 | GET    | `/devices/:id`         | One device.                                              |
 | POST   | `/devices/:id/actions` | Execute a command the device supports.                   |
 
@@ -122,6 +123,23 @@ If the request is rejected **before** execution the body is a plain error, never
 
 Error messages name the field and the rule but never echo submitted values.
 
+## Realtime events (`GET /devices/events`)
+
+A Server-Sent Events stream (`text/event-stream`). It is a **hint channel, not the source of truth**: a client
+loads `GET /devices` first and again after every (re)connection, then applies events on top.
+
+| Event    | `data`                                          | Meaning                                                                |
+| -------- | ----------------------------------------------- | ---------------------------------------------------------------------- |
+| `ready`  | `{ serverTime }`                                | The stream is open. Reload the list now (events may have been missed). |
+| `device` | a full `Device` (same shape as `GET /devices`)  | One device changed: state, availability, alias, favorite or room.      |
+| `resync` | `{ reason: refresh\|removed\|rooms\|settings }` | Devices were added/removed or rooms changed: reload the list.          |
+
+- `: ping` comment lines are sent every 15 s as a heartbeat; `retry: 3000` tells the browser how long to wait.
+- Events carry only the public device view: no provider identifiers.
+- At most 50 streams are open at once (`429 too_many_requests` beyond that). A client that stops reading is
+  disconnected instead of buffered without limit.
+- The stream is read-only and, like the other `GET` endpoints, unauthenticated (see the security note).
+
 ## Aliases, favorites and rooms
 
 The API stores the user's own metadata (see [STORAGE.md](STORAGE.md)). A device shows `name` (the alias when
@@ -189,6 +207,7 @@ curl -s -X POST localhost:3001/devices/<id>/actions -H 'content-type: applicatio
 
 - No authentication, authorization or rate limiting yet (see the security note above).
 - Actions are not persisted or audited (command history is a later task).
+- Events are not replayed: a client that was disconnected must reload `GET /devices` (the web app does).
 - Verified against a simulated Home Assistant, not a real one. Service names and the state each command
   produces follow the Home Assistant documentation; real devices may behave differently (for example a
   TV may take longer than the confirmation window, which yields `accepted`).

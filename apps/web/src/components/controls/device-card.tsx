@@ -33,11 +33,13 @@ interface DeviceCardProps {
   name: string;
   room?: string | null;
   availability: DeviceAvailability;
+  /** Extra header control, e.g. a favorite toggle. */
+  action?: ReactNode;
   children?: ReactNode;
 }
 
 /** Card for one device: name, room, honest availability badge and its controls. */
-export function DeviceCard({ name, room, availability, children }: DeviceCardProps) {
+export function DeviceCard({ name, room, availability, action, children }: DeviceCardProps) {
   const info = AVAILABILITY[availability];
   const blocked = availability === 'unavailable';
 
@@ -47,7 +49,10 @@ export function DeviceCard({ name, room, availability, children }: DeviceCardPro
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <CardTitle>{name}</CardTitle>
-            <Badge variant={info.variant}>{info.label}</Badge>
+            <div className="flex shrink-0 items-center gap-1">
+              <Badge variant={info.variant}>{info.label}</Badge>
+              {action}
+            </div>
           </div>
           {room ? <CardDescription>{room}</CardDescription> : null}
           {info.note ? <CardDescription>{info.note}</CardDescription> : null}
