@@ -11,6 +11,7 @@ orchestrated through Home Assistant. This repository is a pnpm monorepo.
 | `apps/api`        | Fastify (TypeScript) backend, owner of all credentials |
 | `packages/shared` | Shared TypeScript contracts used by `web` and `api`    |
 | `docs/`           | Architecture and project documentation                 |
+| `compose.yaml`    | Docker Compose stack (web + api)                       |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
@@ -37,6 +38,25 @@ pnpm dev          # builds shared, then runs shared (watch), api and web in para
 - API: http://localhost:3001 (health check: `GET /health`)
 
 The API reads `API_PORT` (default `3001`) and `API_HOST` (default `0.0.0.0`).
+
+## Docker
+
+The whole stack runs with Docker Compose (web + api, with a persistent volume for the API data).
+
+```bash
+cp .env.example .env     # optional; defaults work out of the box
+docker compose up --build
+```
+
+- Web: http://localhost:3000 (shows the API status, proving web → api networking)
+- API: http://localhost:3001/health
+- Persistence: the named volume `api-data` is mounted at `/data` in the API container
+  (SQLite will live there). Remove it with `docker compose down -v`.
+- Home Assistant is **not** part of this stack; it runs separately in a macOS VM.
+- Secrets in `.env` are passed only to the API service, never to the web service.
+- Containers run as the non-root `node` user and expose healthchecks.
+
+Change the published host ports with `WEB_HOST_PORT` and `API_HOST_PORT` in `.env`.
 
 ## Scripts
 

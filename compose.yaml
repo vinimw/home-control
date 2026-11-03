@@ -1,0 +1,38 @@
+name: home-control
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    # Secrets (e.g. Home Assistant token) live in .env and reach ONLY the API.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: '3001'
+      DATA_DIR: /data
+    ports:
+      - '${API_HOST_PORT:-3001}:3001'
+    volumes:
+      - api-data:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      # Server-side calls reach the API through the Compose network.
+      API_INTERNAL_URL: http://api:3001
+    ports:
+      - '${WEB_HOST_PORT:-3000}:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  # Persistent SQLite storage for the API.
+  api-data:
