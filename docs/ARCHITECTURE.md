@@ -23,7 +23,8 @@ Home Assistant (separate macOS VM)  ──►  Samsung TV · Echo Show 8 · Spot
 - **packages/shared**: TypeScript contracts (DTOs, capability types, API paths) shared by both apps.
   It is compiled to `dist/`, so `shared` must be built before `api` and `web` are type-checked or built
   (the root scripts handle this).
-- **Home Assistant**: runs outside this repository, in a macOS VM. SQLite lives in a persistent
+- **Home Assistant**: runs outside this repository, in a macOS VM (setup in
+  [HOME_ASSISTANT.md](HOME_ASSISTANT.md)). SQLite lives in a persistent
   API volume.
 
 ## Containers
