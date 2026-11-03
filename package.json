@@ -5,7 +5,7 @@
   "description": "Local home control hub for Samsung TV, Echo Show 8 and Spotify via Home Assistant",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.9"
   },
   "scripts": {
     "dev": "pnpm --filter @home-control/shared build && pnpm -r --parallel dev",
@@ -15,7 +15,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "clean": "pnpm -r exec rm -rf dist .next *.tsbuildinfo",
-    "ha:check": "bash scripts/check-home-assistant.sh"
+    "ha:check": "bash scripts/check-home-assistant.sh",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build",
+    "env:init": "test -f .env || cp .env.example .env",
+    "env:check": "pnpm --filter @home-control/api env:check",
+    "dev:doctor": "bash scripts/doctor.sh",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

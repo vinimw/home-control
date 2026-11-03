@@ -1,13 +1,14 @@
 import { API_HEALTH_PATH, type HealthResponse } from '@home-control/shared';
+import { env } from '../lib/env';
 
 // Rendered per request so the API status is always fresh.
 export const dynamic = 'force-dynamic';
 
-const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
-
 async function getApiHealth(): Promise<HealthResponse | null> {
   try {
-    const response = await fetch(`${apiUrl}${API_HEALTH_PATH}`, { cache: 'no-store' });
+    const response = await fetch(`${env.API_INTERNAL_URL}${API_HEALTH_PATH}`, {
+      cache: 'no-store',
+    });
     return response.ok ? ((await response.json()) as HealthResponse) : null;
   } catch {
     return null;

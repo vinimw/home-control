@@ -15,29 +15,27 @@ orchestrated through Home Assistant. This repository is a pnpm monorepo.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
-## Requirements
-
-- Node.js >= 22 (see `.nvmrc`)
-- pnpm 10 (pinned through `packageManager`; enable with `corepack enable`)
-
-## Setup
+## Quick start
 
 ```bash
 corepack enable
 pnpm install
-pnpm build        # builds shared, api and web
+pnpm env:init     # creates .env from .env.example
+pnpm build
+pnpm dev          # web on :3000, api on :3001
 ```
 
-## Development
-
-```bash
-pnpm dev          # builds shared, then runs shared (watch), api and web in parallel
-```
+Requires macOS and Node >= 22.9 (see `.nvmrc`). Docker Desktop is only needed for the Compose stack.
+Full guide, configuration reference and troubleshooting: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 - Web: http://localhost:3000
 - API: http://localhost:3001 (health check: `GET /health`)
 
-The API reads `API_PORT` (default `3001`) and `API_HOST` (default `0.0.0.0`).
+## Configuration
+
+Environment variables are loaded from `.env` (git-ignored; template in `.env.example`) and validated on
+startup. A missing or invalid value stops the API with a message naming the variable. Secrets never go in Git.
+Run `pnpm dev:doctor` to diagnose your machine and `pnpm env:check` to validate your `.env`.
 
 ## Docker
 
@@ -61,15 +59,17 @@ Change the published host ports with `WEB_HOST_PORT` and `API_HOST_PORT` in `.en
 
 ## Scripts
 
-| Command             | Description                          |
-| ------------------- | ------------------------------------ |
-| `pnpm dev`          | Run all packages in development mode |
-| `pnpm build`        | Build all packages                   |
-| `pnpm typecheck`    | Type-check all packages              |
-| `pnpm lint`         | Lint with ESLint                     |
-| `pnpm format`       | Format with Prettier                 |
-| `pnpm format:check` | Verify formatting                    |
-| `pnpm clean`        | Remove build output                  |
+| Command           | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `pnpm dev`        | Run all packages in development mode                  |
+| `pnpm build`      | Build all packages                                    |
+| `pnpm check`      | Format check, lint, typecheck and build (before a PR) |
+| `pnpm lint`       | Lint with ESLint                                      |
+| `pnpm format`     | Format with Prettier                                  |
+| `pnpm env:check`  | Validate the environment                              |
+| `pnpm dev:doctor` | Diagnose the local setup                              |
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the complete list.
 
 ## Conventions
 
