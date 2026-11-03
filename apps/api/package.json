@@ -16,5 +16,8 @@
   "dependencies": {
     "@home-control/shared": "workspace:*",
     "fastify": "^5.12.8"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

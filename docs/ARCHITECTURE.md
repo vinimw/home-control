@@ -26,6 +26,15 @@ Home Assistant (separate macOS VM)  ──►  Samsung TV · Echo Show 8 · Spot
 - **Home Assistant**: runs outside this repository, in a macOS VM. SQLite lives in a persistent
   API volume.
 
+## Containers
+
+- One multi-stage Dockerfile per app (`apps/api/Dockerfile`, `apps/web/Dockerfile`), built from the
+  repository root. Final images are `node:22-alpine`, non-root, with healthchecks.
+- API image is slimmed with `pnpm deploy --legacy --prod`; web uses Next.js `output: 'standalone'`.
+- `compose.yaml` wires `web` -> `api` over the Compose network (`API_INTERNAL_URL=http://api:3001`),
+  starts `web` only after `api` is healthy, and mounts the `api-data` volume at `/data`.
+- `.env` (ignored by Git) is loaded by the API service only; `.env.example` is the template.
+
 ## Principles
 
 1. **Capability-driven control**: the UI renders controls from the capabilities a device reports,
