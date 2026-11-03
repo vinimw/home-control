@@ -66,6 +66,9 @@ The API authenticates with a **long-lived access token**:
 
 Rules for this token:
 
+- Create it from an **administrator** account. Rooms and manufacturers come from the entity, device and area
+  registries, which Home Assistant only serves to administrators. With a non-admin token the API still
+  works, but without rooms (see `DEVICES.md`).
 - It lives **only** in `.env` (ignored by Git) and is loaded **only** by the `api` service. The web
   service never receives it, and it must never reach the browser.
 - Never paste it in issues, PRs, logs or chat. Revoke it in the same screen if it leaks.

@@ -27,3 +27,29 @@ export interface Logger {
   warn(obj: object, msg?: string): void;
   error(obj: object, msg?: string): void;
 }
+
+/** `config/entity_registry/list` entry (only the fields we use). */
+export interface HassEntityRegistryEntry {
+  entity_id: string;
+  device_id?: string | null;
+  area_id?: string | null;
+  name?: string | null;
+  original_name?: string | null;
+  disabled_by?: string | null;
+  hidden_by?: string | null;
+  entity_category?: string | null;
+}
+
+/** `config/device_registry/list` entry (only the fields we use). */
+export interface HassDeviceRegistryEntry {
+  id: string;
+  area_id?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+}
+
+/** `config/area_registry/list` entry. */
+export interface HassAreaRegistryEntry {
+  area_id: string;
+  name: string;
+}

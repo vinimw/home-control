@@ -14,7 +14,11 @@ function readConfig() {
 }
 
 const config = readConfig();
-const app = buildServer({ logLevel: config.logLevel, homeAssistant: config.homeAssistant });
+const app = buildServer({
+  logLevel: config.logLevel,
+  homeAssistant: config.homeAssistant,
+  deviceRefreshIntervalMs: config.deviceRefreshIntervalMs,
+});
 
 app.log.info(
   {
@@ -28,6 +32,7 @@ try {
   await app.listen({ port: config.port, host: config.host });
   // Realtime connection retries in the background; the API is usable even if HA is down.
   app.homeAssistant.start();
+  app.devices.start();
 } catch (error) {
   app.log.error(error);
   process.exit(1);

@@ -1,3 +1,4 @@
+import type { DeviceRegistrySummary } from './devices.js';
 import type { ApiErrorPayload } from './errors.js';
 
 export type HomeAssistantConnectionState =
@@ -30,3 +31,8 @@ export interface HomeAssistantStatus {
 
 export const API_HA_STATUS_PATH = '/ha/status';
 export const API_HA_PING_PATH = '/ha/ping';
+
+/** `GET /ha/status` response: integration health plus device registry counters (no device data). */
+export interface HomeAssistantStatusResponse extends HomeAssistantStatus {
+  devices: DeviceRegistrySummary;
+}

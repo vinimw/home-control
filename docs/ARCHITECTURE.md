@@ -33,6 +33,12 @@ Home Assistant (separate macOS VM)  ──►  Samsung TV · Echo Show 8 · Spot
 ping/pong, re-subscribe), and a `HomeAssistantService` facade exposed as `app.homeAssistant`. Errors are
 mapped to the shared `ApiErrorBody` contract. Details and endpoints: [HOME_ASSISTANT.md](HOME_ASSISTANT.md).
 
+## Device registry
+
+`apps/api/src/devices/` normalizes Home Assistant entities into the canonical device model
+(`packages/shared/src/devices.ts`): type, capabilities, supported commands, availability, room. Provider
+identifiers stay server-side. See [DEVICES.md](DEVICES.md).
+
 ## Containers
 
 - One multi-stage Dockerfile per app (`apps/api/Dockerfile`, `apps/web/Dockerfile`), built from the
