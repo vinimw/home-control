@@ -45,6 +45,7 @@ export class DeviceRegistry {
   private intervalTimer: NodeJS.Timeout | null = null;
   private newEntityTimer: NodeJS.Timeout | null = null;
   private readonly unsubscribers: Array<() => void> = [];
+  private readonly changeListeners = new Set<(deviceId: string) => void>();
   private started = false;
 
   constructor(private readonly options: DeviceRegistryOptions) {}
@@ -84,6 +85,12 @@ export class DeviceRegistry {
         (a, b) =>
           (a.room?.name ?? '￿').localeCompare(b.room?.name ?? '￿') || a.name.localeCompare(b.name),
       );
+  }
+
+  /** Notified with the device id whenever a live event changes a device. Returns an unsubscribe. */
+  onChange(listener: (deviceId: string) => void): () => void {
+    this.changeListeners.add(listener);
+    return () => this.changeListeners.delete(listener);
   }
 
   get(id: string): Device | undefined {
@@ -234,10 +241,22 @@ export class DeviceRegistry {
       this.entries.set(result.device.id, result);
       this.deviceIdByEntity.set(entityId, result.device.id);
       this.ignored.delete(entityId);
+      this.notifyChange(result.device.id);
     }
 
     // A brand-new entity has no registry data yet (room, hidden flags): resync shortly to pick it up.
     if (!wasKnown && this.ready) this.scheduleRefresh();
+  }
+
+  private notifyChange(deviceId: string): void {
+    for (const listener of this.changeListeners) {
+      try {
+        listener(deviceId);
+      } catch (error) {
+        // A faulty listener must never stop the live sync.
+        this.options.logger.error({ err: String(error) }, 'device change listener threw');
+      }
+    }
   }
 
   private scheduleRefresh(): void {

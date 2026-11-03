@@ -9,6 +9,11 @@ export type ApiErrorCode =
   | 'upstream_error'
   | 'invalid_response'
   | 'disconnected'
+  | 'unsupported_action'
+  | 'invalid_params'
+  | 'device_unavailable'
+  | 'actions_disabled'
+  | 'conflict'
   | 'internal_error';
 
 export interface ApiErrorPayload {

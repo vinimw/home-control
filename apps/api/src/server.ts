@@ -1,14 +1,17 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { API_HEALTH_PATH, type ApiErrorBody, type HealthResponse } from '@home-control/shared';
-import { HTTP_STATUS_BY_CODE, HomeAssistantError } from './homeassistant/errors.js';
+import { ApiError, HTTP_STATUS_BY_CODE } from './errors.js';
+import { DeviceActionService } from './devices/actions/service.js';
 import { DeviceRegistry } from './devices/registry.js';
 import { HomeAssistantService, type HomeAssistantSettings } from './homeassistant/service.js';
+import { registerDeviceRoutes } from './routes/devices.js';
 import { registerHomeAssistantRoutes } from './routes/homeassistant.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     homeAssistant: HomeAssistantService;
     devices: DeviceRegistry;
+    deviceActions: DeviceActionService;
   }
 }
 
@@ -16,6 +19,8 @@ export interface ServerOptions {
   logLevel?: string;
   homeAssistant?: HomeAssistantSettings | null;
   deviceRefreshIntervalMs?: number;
+  /** Device actions stay disabled unless explicitly enabled (no authentication yet). */
+  deviceActions?: { enabled: boolean; confirmTimeoutMs?: number };
 }
 
 export function buildServer(options: ServerOptions = {}): FastifyInstance {
@@ -45,14 +50,24 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       refreshIntervalMs: options.deviceRefreshIntervalMs ?? 300_000,
     }),
   );
+  app.decorate(
+    'deviceActions',
+    new DeviceActionService({
+      registry: app.devices,
+      homeAssistant: app.homeAssistant,
+      logger: app.log,
+      enabled: options.deviceActions?.enabled ?? false,
+      confirmTimeoutMs: options.deviceActions?.confirmTimeoutMs,
+    }),
+  );
   app.addHook('onClose', async () => {
     app.devices.stop();
     app.homeAssistant.stop();
   });
 
   app.setErrorHandler((error, request, reply) => {
-    if (error instanceof HomeAssistantError) {
-      request.log.warn({ code: error.code }, 'home assistant request failed');
+    if (error instanceof ApiError) {
+      request.log.warn({ code: error.code }, 'request failed');
       const body: ApiErrorBody = { error: error.toPayload() };
       return reply.status(HTTP_STATUS_BY_CODE[error.code]).send(body);
     }
@@ -83,6 +98,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   }));
 
   registerHomeAssistantRoutes(app);
+  registerDeviceRoutes(app);
 
   return app;
 }

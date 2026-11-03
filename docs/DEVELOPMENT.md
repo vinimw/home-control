@@ -50,6 +50,7 @@ Error messages name the variable and the rule but never print values, so tokens 
 | `HOME_ASSISTANT_TOKEN`       | api     | unset                   | Long-lived token. Never exposed to the web app                            |
 | `HOME_ASSISTANT_TIMEOUT_MS`  | api     | `10000`                 | REST timeout, 1000-60000                                                  |
 | `DEVICE_REFRESH_INTERVAL_MS` | api     | `300000`                | Device registry full resync, 5000-3600000                                 |
+| `DEVICE_ACTIONS_ENABLED`     | api     | `false`                 | Enables `POST /devices/:id/actions`; no auth yet, trusted network only    |
 
 Home Assistant variables are optional for now and must be set **together**. Run `pnpm env:check` to
 validate a complete setup (it requires both Home Assistant variables). The integration itself arrives in a

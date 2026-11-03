@@ -39,6 +39,13 @@ mapped to the shared `ApiErrorBody` contract. Details and endpoints: [HOME_ASSIS
 (`packages/shared/src/devices.ts`): type, capabilities, supported commands, availability, room. Provider
 identifiers stay server-side. See [DEVICES.md](DEVICES.md).
 
+## Devices API
+
+`GET /devices`, `GET /devices/:id` and `POST /devices/:id/actions`. Actions accept only canonical commands the
+device advertises, validate params strictly, and are routed to Home Assistant through a fixed server-side
+table; results are `accepted`, `confirmed` or `failed`. Actions are disabled by default until authentication
+exists. See [DEVICES_API.md](DEVICES_API.md).
+
 ## Containers
 
 - One multi-stage Dockerfile per app (`apps/api/Dockerfile`, `apps/web/Dockerfile`), built from the
