@@ -33,4 +33,5 @@ USER node
 EXPOSE 3001
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
   CMD wget -qO- http://127.0.0.1:3001/health || exit 1
-CMD ["node", "dist/index.js"]
+# node:sqlite is still flagged experimental in Node 22/24; the warning is expected noise.
+CMD ["node", "--disable-warning=ExperimentalWarning", "dist/index.js"]

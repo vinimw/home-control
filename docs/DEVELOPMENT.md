@@ -14,7 +14,7 @@ pnpm build                 # builds packages/shared first, then api and web
 pnpm dev                   # web on :3000, api on :3001
 ```
 
-Requirements: macOS, **Node >= 22.9** (`nvm install` reads `.nvmrc`), Docker Desktop only if you use Compose.
+Requirements: macOS, **Node >= 22.13** (`nvm install` reads `.nvmrc`), Docker Desktop only if you use Compose.
 
 Check it works: `curl http://localhost:3001/health` returns `{"status":"ok",...}` and
 http://localhost:3000 shows `API status: ok`.
@@ -78,21 +78,22 @@ later task, which will make them required for the features that use them.
 
 Start with `pnpm dev:doctor`; it flags most of the items below.
 
-| Symptom                                                 | Cause and fix                                                                                                                        |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `Unsupported engine` / `--env-file-if-exists` not found | Node is too old. `nvm install && nvm use` (needs >= 22.9).                                                                           |
-| `pnpm: command not found`                               | Run `corepack enable`. If it fails with permissions: `sudo corepack enable` or install pnpm via Homebrew.                            |
-| `Cannot find module '@home-control/shared'`             | The shared package is not built. Run `pnpm build` (or `pnpm dev`, which builds it first).                                            |
-| `Invalid configuration: ...` on API start               | Fix the named variable in `.env`. See the Configuration table.                                                                       |
-| `EADDRINUSE` / port already in use                      | Find it: `lsof -iTCP:3001 -sTCP:LISTEN -n -P`, then stop that process or change the port in `.env`.                                  |
-| On macOS, port 5000/7000 conflicts                      | Not used here. (AirPlay Receiver uses them; ports 3000/3001 are free by default.)                                                    |
-| `Cannot connect to the Docker daemon`                   | Open Docker Desktop and wait until it reports running.                                                                               |
-| API container keeps restarting                          | `docker compose logs api`: usually an `Invalid configuration` message. Fix `.env`, then `docker compose up -d --force-recreate api`. |
-| `.env` changes ignored in Docker                        | Recreate the service: `docker compose up -d --force-recreate api`.                                                                   |
-| Web shows `API status: unreachable`                     | The API is down or `API_INTERNAL_URL` is wrong. Check `curl localhost:3001/health`.                                                  |
-| Build fails after switching branches                    | `pnpm clean && pnpm install && pnpm build`.                                                                                          |
-| Apple Silicon: slow or wrong-arch images                | Use native `linux/arm64` images (the defaults); avoid `--platform linux/amd64`.                                                      |
-| esbuild / install script warnings                       | Only `esbuild` is allowed to run build scripts (`pnpm-workspace.yaml`); this is intentional.                                         |
+| Symptom                                                      | Cause and fix                                                                                                                                                                          |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Unsupported engine` / `--env-file-if-exists` not found      | Node is too old. `nvm install && nvm use` (needs >= 22.13).                                                                                                                            |
+| `pnpm: command not found`                                    | Run `corepack enable`. If it fails with permissions: `sudo corepack enable` or install pnpm via Homebrew.                                                                              |
+| `Cannot find module '@home-control/shared'`                  | The shared package is not built. Run `pnpm build` (or `pnpm dev`, which builds it first).                                                                                              |
+| `Invalid configuration: ...` on API start                    | Fix the named variable in `.env`. See the Configuration table.                                                                                                                         |
+| `EADDRINUSE` / port already in use                           | Find it: `lsof -iTCP:3001 -sTCP:LISTEN -n -P`, then stop that process or change the port in `.env`.                                                                                    |
+| On macOS, port 5000/7000 conflicts                           | Not used here. (AirPlay Receiver uses them; ports 3000/3001 are free by default.)                                                                                                      |
+| `Cannot connect to the Docker daemon`                        | Open Docker Desktop and wait until it reports running.                                                                                                                                 |
+| API container keeps restarting                               | `docker compose logs api`: usually an `Invalid configuration` message. Fix `.env`, then `docker compose up -d --force-recreate api`.                                                   |
+| `.env` changes ignored in Docker                             | Recreate the service: `docker compose up -d --force-recreate api`.                                                                                                                     |
+| Web shows `API status: unreachable`                          | The API is down or `API_INTERNAL_URL` is wrong. Check `curl localhost:3001/health`.                                                                                                    |
+| Build fails after switching branches                         | `pnpm clean && pnpm install && pnpm build`.                                                                                                                                            |
+| `Could not open the database` / migration error on API start | The data directory is not writable, or the database came from a newer version or an edited migration. Details in `docs/STORAGE.md`. Local data lives in `apps/api/data` (git-ignored). |
+| Apple Silicon: slow or wrong-arch images                     | Use native `linux/arm64` images (the defaults); avoid `--platform linux/amd64`.                                                                                                        |
+| esbuild / install script warnings                            | Only `esbuild` is allowed to run build scripts (`pnpm-workspace.yaml`); this is intentional.                                                                                           |
 
 ## Conventions
 

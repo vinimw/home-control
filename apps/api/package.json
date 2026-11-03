@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
-    "start": "node --env-file-if-exists=../../.env dist/index.js",
+    "dev": "tsx watch --disable-warning=ExperimentalWarning --env-file-if-exists=../../.env src/index.ts",
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "env:check": "tsx --env-file-if-exists=../../.env src/check-env.ts"
   },

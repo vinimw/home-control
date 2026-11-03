@@ -437,17 +437,23 @@ export function classifyEntity(
     state = emptyState();
   }
 
+  const sourceName =
+    asString(entity?.name) ??
+    asString(attrs.friendly_name) ??
+    asString(entity?.original_name) ??
+    humanize(entityId);
+
   const areaId = entity?.area_id ?? device?.area_id ?? null;
   const areaName = areaId ? (areas?.get(areaId) ?? null) : null;
 
   return {
     device: {
       id: deviceIdFor(entityId),
-      name:
-        asString(entity?.name) ??
-        asString(attrs.friendly_name) ??
-        asString(entity?.original_name) ??
-        humanize(entityId),
+      name: sourceName,
+      sourceName,
+      // User metadata is layered on top by the DeviceCatalog; the registry only knows Home Assistant.
+      alias: null,
+      favorite: false,
       type,
       availability,
       room:

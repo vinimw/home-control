@@ -10,13 +10,13 @@ bad()  { printf '  [FAIL] %s\n' "$1"; fail=1; }
 
 echo "Home Control environment check"
 
-# Node >= 22.9 (needed for --env-file-if-exists)
+# Node >= 22.13 (built-in node:sqlite without a flag, and --env-file-if-exists)
 if command -v node >/dev/null 2>&1; then
   node_version=$(node -p 'process.versions.node')
-  if node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=9)?0:1)'; then
+  if node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'; then
     ok "Node $node_version"
   else
-    bad "Node $node_version is too old; need >= 22.9 (run: nvm install, see .nvmrc)"
+    bad "Node $node_version is too old; need >= 22.13 (run: nvm install, see .nvmrc)"
   fi
 else
   bad "Node not found (install it, e.g. with nvm or Homebrew)"
