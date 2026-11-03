@@ -172,7 +172,12 @@ the browser's.
 | IP changed after reboot                       | Missing DHCP reservation (section 3).                                          |
 | TV/Echo not discovered                        | VM is not bridged, is on Wi-Fi bridge, or is on another VLAN/subnet.           |
 
-## 9. Known limitations
+## 9. Pairing devices
+
+Pair the TV with [SAMSUNG_TV.md](SAMSUNG_TV.md). After pairing any device, run `pnpm device:probe` to see
+what the API really offers for it.
+
+## 10. Known limitations
 
 - This setup was documented from the official procedure and was **not** verified against a real HA OS
   VM in this repository's CI; confirm each step on your hardware.
