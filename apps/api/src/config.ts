@@ -30,6 +30,12 @@ const schema = z
         .optional(),
     ),
     HOME_ASSISTANT_TOKEN: optionalString,
+    HOME_ASSISTANT_TIMEOUT_MS: z.coerce
+      .number({ message: 'must be a number' })
+      .int('must be an integer')
+      .min(1000, 'must be between 1000 and 60000')
+      .max(60_000, 'must be between 1000 and 60000')
+      .default(10_000),
   })
   .superRefine((env, ctx) => {
     if (env.HOME_ASSISTANT_URL && !env.HOME_ASSISTANT_TOKEN) {
@@ -53,7 +59,7 @@ export interface AppConfig {
   port: number;
   logLevel: string;
   dataDir: string;
-  homeAssistant: { url: string; token: string } | null;
+  homeAssistant: { url: string; token: string; timeoutMs: number } | null;
 }
 
 export class ConfigError extends Error {
@@ -96,6 +102,9 @@ export function loadConfig(
     port: parsed.API_PORT,
     logLevel: parsed.LOG_LEVEL,
     dataDir: resolve(parsed.DATA_DIR),
-    homeAssistant: url && token ? { url: url.replace(/\/+$/, ''), token } : null,
+    homeAssistant:
+      url && token
+        ? { url: url.replace(/\/+$/, ''), token, timeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS }
+        : null,
   };
 }

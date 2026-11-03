@@ -27,6 +27,12 @@ Home Assistant (separate macOS VM)  ──►  Samsung TV · Echo Show 8 · Spot
   [HOME_ASSISTANT.md](HOME_ASSISTANT.md)). SQLite lives in a persistent
   API volume.
 
+## Home Assistant integration
+
+`apps/api/src/homeassistant/` contains a REST client, a WebSocket client (reconnect with backoff,
+ping/pong, re-subscribe), and a `HomeAssistantService` facade exposed as `app.homeAssistant`. Errors are
+mapped to the shared `ApiErrorBody` contract. Details and endpoints: [HOME_ASSISTANT.md](HOME_ASSISTANT.md).
+
 ## Containers
 
 - One multi-stage Dockerfile per app (`apps/api/Dockerfile`, `apps/web/Dockerfile`), built from the

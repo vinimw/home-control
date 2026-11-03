@@ -37,17 +37,18 @@ See .env.example and docs/DEVELOPMENT.md.
 
 Error messages name the variable and the rule but never print values, so tokens cannot leak into logs.
 
-| Variable               | Service | Default                 | Notes                                                                     |
-| ---------------------- | ------- | ----------------------- | ------------------------------------------------------------------------- |
-| `WEB_HOST_PORT`        | compose | `3000`                  | Host port for the web container                                           |
-| `API_HOST_PORT`        | compose | `3001`                  | Host port for the API container                                           |
-| `API_HOST`             | api     | `0.0.0.0`               | Fixed by Compose inside Docker                                            |
-| `API_PORT`             | api     | `3001`                  | Integer 1-65535; fixed by Compose inside Docker                           |
-| `LOG_LEVEL`            | api     | `info`                  | `fatal` to `silent`                                                       |
-| `DATA_DIR`             | api     | `./data`                | SQLite dir (locally `apps/api/data`, git-ignored); Docker: volume `/data` |
-| `API_INTERNAL_URL`     | web     | `http://localhost:3001` | Server-side API URL; Docker sets `http://api:3001`                        |
-| `HOME_ASSISTANT_URL`   | api     | unset                   | http(s) URL of the HA VM. Set with the token                              |
-| `HOME_ASSISTANT_TOKEN` | api     | unset                   | Long-lived token. Never exposed to the web app                            |
+| Variable                    | Service | Default                 | Notes                                                                     |
+| --------------------------- | ------- | ----------------------- | ------------------------------------------------------------------------- |
+| `WEB_HOST_PORT`             | compose | `3000`                  | Host port for the web container                                           |
+| `API_HOST_PORT`             | compose | `3001`                  | Host port for the API container                                           |
+| `API_HOST`                  | api     | `0.0.0.0`               | Fixed by Compose inside Docker                                            |
+| `API_PORT`                  | api     | `3001`                  | Integer 1-65535; fixed by Compose inside Docker                           |
+| `LOG_LEVEL`                 | api     | `info`                  | `fatal` to `silent`                                                       |
+| `DATA_DIR`                  | api     | `./data`                | SQLite dir (locally `apps/api/data`, git-ignored); Docker: volume `/data` |
+| `API_INTERNAL_URL`          | web     | `http://localhost:3001` | Server-side API URL; Docker sets `http://api:3001`                        |
+| `HOME_ASSISTANT_URL`        | api     | unset                   | http(s) URL of the HA VM. Set with the token                              |
+| `HOME_ASSISTANT_TOKEN`      | api     | unset                   | Long-lived token. Never exposed to the web app                            |
+| `HOME_ASSISTANT_TIMEOUT_MS` | api     | `10000`                 | REST timeout, 1000-60000                                                  |
 
 Home Assistant variables are optional for now and must be set **together**. Run `pnpm env:check` to
 validate a complete setup (it requires both Home Assistant variables). The integration itself arrives in a
