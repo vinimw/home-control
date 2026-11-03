@@ -1,5 +1,7 @@
 import { ConfigError, loadConfig } from './config.js';
+import { join } from 'node:path';
 import { buildServer } from './server.js';
+import { Storage, StorageError } from './storage/index.js';
 
 function readConfig() {
   try {
@@ -14,7 +16,22 @@ function readConfig() {
 }
 
 const config = readConfig();
+
+function openStorage() {
+  try {
+    return Storage.open(join(config.dataDir, 'home-control.db'));
+  } catch (error) {
+    if (error instanceof StorageError) {
+      console.error(`${error.message}\nData directory: ${config.dataDir}`);
+      process.exit(1);
+    }
+    throw error;
+  }
+}
+
+const storage = openStorage();
 const app = buildServer({
+  storage,
   logLevel: config.logLevel,
   homeAssistant: config.homeAssistant,
   deviceRefreshIntervalMs: config.deviceRefreshIntervalMs,
@@ -25,8 +42,13 @@ app.log.info(
   {
     dataDir: config.dataDir,
     homeAssistant: config.homeAssistant ? 'configured' : 'not configured',
+    deviceActions: config.deviceActionsEnabled ? 'enabled' : 'disabled',
   },
   'configuration loaded',
+);
+app.log.info(
+  { ...storage.summary(), migrationsApplied: storage.migration.applied },
+  'database ready',
 );
 
 try {

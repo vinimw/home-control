@@ -2,20 +2,28 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { API_HEALTH_PATH, type ApiErrorBody, type HealthResponse } from '@home-control/shared';
 import { ApiError, HTTP_STATUS_BY_CODE } from './errors.js';
 import { DeviceActionService } from './devices/actions/service.js';
+import { DeviceCatalog } from './devices/catalog.js';
 import { DeviceRegistry } from './devices/registry.js';
 import { HomeAssistantService, type HomeAssistantSettings } from './homeassistant/service.js';
 import { registerDeviceRoutes } from './routes/devices.js';
+import { registerRoomRoutes } from './routes/rooms.js';
+import { registerSettingsRoutes } from './routes/settings.js';
+import { Storage } from './storage/index.js';
 import { registerHomeAssistantRoutes } from './routes/homeassistant.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     homeAssistant: HomeAssistantService;
+    storage: Storage;
     devices: DeviceRegistry;
+    catalog: DeviceCatalog;
     deviceActions: DeviceActionService;
   }
 }
 
 export interface ServerOptions {
+  /** Persistent storage. Defaults to a non-persistent in-memory database (tests); production passes a file. */
+  storage?: Storage;
   logLevel?: string;
   homeAssistant?: HomeAssistantSettings | null;
   deviceRefreshIntervalMs?: number;
@@ -42,6 +50,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   });
 
   app.decorate('homeAssistant', new HomeAssistantService(options.homeAssistant ?? null, app.log));
+  app.decorate('storage', options.storage ?? Storage.openInMemory());
   app.decorate(
     'devices',
     new DeviceRegistry({
@@ -50,12 +59,14 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       refreshIntervalMs: options.deviceRefreshIntervalMs ?? 300_000,
     }),
   );
+  app.decorate('catalog', new DeviceCatalog(app.devices, app.storage));
   app.decorate(
     'deviceActions',
     new DeviceActionService({
       registry: app.devices,
       homeAssistant: app.homeAssistant,
       logger: app.log,
+      view: (id) => app.catalog.get(id),
       enabled: options.deviceActions?.enabled ?? false,
       confirmTimeoutMs: options.deviceActions?.confirmTimeoutMs,
     }),
@@ -63,6 +74,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   app.addHook('onClose', async () => {
     app.devices.stop();
     app.homeAssistant.stop();
+    app.storage.close();
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -99,6 +111,8 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
   registerHomeAssistantRoutes(app);
   registerDeviceRoutes(app);
+  registerRoomRoutes(app);
+  registerSettingsRoutes(app);
 
   return app;
 }

@@ -25,7 +25,7 @@ pnpm build
 pnpm dev          # web on :3000, api on :3001
 ```
 
-Requires macOS and Node >= 22.9 (see `.nvmrc`). Docker Desktop is only needed for the Compose stack.
+Requires macOS and Node >= 22.13 (see `.nvmrc`). Docker Desktop is only needed for the Compose stack.
 Full guide, configuration reference and troubleshooting: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 - Web: http://localhost:3000

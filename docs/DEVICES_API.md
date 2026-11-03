@@ -122,6 +122,33 @@ If the request is rejected **before** execution the body is a plain error, never
 
 Error messages name the field and the rule but never echo submitted values.
 
+## Aliases, favorites and rooms
+
+The API stores the user's own metadata (see [STORAGE.md](STORAGE.md)). A device shows `name` (the alias when
+set, otherwise the Home Assistant name), `sourceName` (always the Home Assistant name), `alias`, `favorite`
+and `room` (the user's room when assigned, otherwise the Home Assistant area).
+
+| Method | Path                    | Body                             | Result               |
+| ------ | ----------------------- | -------------------------------- | -------------------- |
+| PATCH  | `/devices/:id/settings` | `{ alias?, favorite?, roomId? }` | The updated device   |
+| GET    | `/rooms`                |                                  | `{ rooms: Room[] }`  |
+| POST   | `/rooms`                | `{ name }`                       | `201` + the room     |
+| PATCH  | `/rooms/:id`            | `{ name?, sortOrder? }`          | The updated room     |
+| DELETE | `/rooms/:id`            |                                  | `204`                |
+| GET    | `/settings`             |                                  | `{ homeName }`       |
+| PATCH  | `/settings`             | `{ homeName? }`                  | The updated settings |
+
+`GET /devices` also accepts `?favorite=true|false`, and `roomId` matches the room the device is shown in.
+
+- `PATCH /devices/:id/settings` changes only the fields sent; `null` (or a blank alias) clears a value. The
+  device must currently exist (`404` otherwise), and `roomId` must be one of your rooms (`422`).
+- Room names are 1-40 characters, unique ignoring case and accents (`409 conflict` on a duplicate), up to 100 rooms.
+- Alias up to 60 characters; `homeName` up to 60. Control characters are rejected, unknown fields are `400`.
+- Nothing here is sent to Home Assistant.
+
+> These write endpoints are **not authenticated yet** (#26) and are enabled by default: they only change
+> labels and never control a device, so the risk is limited to someone on your LAN renaming things.
+
 ## How arbitrary execution is prevented
 
 1. The client sends a **canonical command** (`set_volume`), never a Home Assistant service or entity.

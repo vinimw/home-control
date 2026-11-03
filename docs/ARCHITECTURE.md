@@ -39,6 +39,12 @@ mapped to the shared `ApiErrorBody` contract. Details and endpoints: [HOME_ASSIS
 (`packages/shared/src/devices.ts`): type, capabilities, supported commands, availability, room. Provider
 identifiers stay server-side. See [DEVICES.md](DEVICES.md).
 
+## Persistence
+
+SQLite (`node:sqlite`, in the `api-data` volume) stores only the user's metadata: rooms, device aliases,
+favorites and settings. Home Assistant remains authoritative for devices. Versioned, repeatable migrations.
+See [STORAGE.md](STORAGE.md).
+
 ## Devices API
 
 `GET /devices`, `GET /devices/:id` and `POST /devices/:id/actions`. Actions accept only canonical commands the

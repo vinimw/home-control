@@ -115,9 +115,17 @@ export interface DeviceRoom {
 export interface Device {
   /** Opaque, stable identifier. Not derived from anything the client can use to reach the provider. */
   id: string;
+  /** Display name: the user's alias when set, otherwise the Home Assistant name. */
   name: string;
+  /** The name Home Assistant gives the device (never changed by the user's alias). */
+  sourceName: string;
+  /** The user's own name for the device, or `null`. Persisted by the API. */
+  alias: string | null;
+  /** Marked as favorite by the user. Persisted by the API. */
+  favorite: boolean;
   type: DeviceType;
   availability: DeviceAvailability;
+  /** The user's room when assigned, otherwise the Home Assistant area. */
   room: DeviceRoom | null;
   manufacturer: string | null;
   model: string | null;

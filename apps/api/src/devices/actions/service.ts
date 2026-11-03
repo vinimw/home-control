@@ -12,6 +12,8 @@ export interface DeviceActionServiceOptions {
   registry: DeviceRegistry;
   homeAssistant: HomeAssistantService;
   logger: Logger;
+  /** How results present the device (e.g. with the user's alias). Defaults to the raw registry view. */
+  view?: (deviceId: string) => Device | undefined;
   /** Master switch. Off by default until authentication exists. */
   enabled: boolean;
   /** How long to wait for the resulting state before answering `accepted`. */
@@ -129,6 +131,12 @@ export class DeviceActionService {
     return this.runIdempotent(deviceId, command, params, requestId, call);
   }
 
+  private viewOf(deviceId: string): Device | null {
+    return (
+      (this.options.view ?? this.options.registry.get.bind(this.options.registry))(deviceId) ?? null
+    );
+  }
+
   private async runIdempotent(
     deviceId: string,
     command: string,
@@ -149,7 +157,7 @@ export class DeviceActionService {
         );
       }
       const original = await existing.result;
-      return { ...original, replayed: true, device: this.options.registry.get(deviceId) ?? null };
+      return { ...original, replayed: true, device: this.viewOf(deviceId) };
     }
 
     const result = this.run(deviceId, command, params, requestId, call);
@@ -173,7 +181,7 @@ export class DeviceActionService {
     requestId: string | null,
     call: NonNullable<ReturnType<typeof toServiceCall>>,
   ): Promise<DeviceActionResult> {
-    const { homeAssistant, registry, logger } = this.options;
+    const { homeAssistant, logger } = this.options;
     const base = { deviceId, command, requestId, replayed: false };
 
     try {
@@ -181,7 +189,7 @@ export class DeviceActionService {
     } catch (error) {
       const payload = toErrorPayload(error);
       logger.warn({ deviceId, command, code: payload.code }, 'device action failed');
-      return { ...base, status: 'failed', error: payload, device: registry.get(deviceId) ?? null };
+      return { ...base, status: 'failed', error: payload, device: this.viewOf(deviceId) };
     }
 
     const expectation = expectationFor(command, params);
@@ -192,7 +200,7 @@ export class DeviceActionService {
       { deviceId, command, service: `${call.domain}.${call.service}`, status },
       'device action',
     );
-    return { ...base, status, device: registry.get(deviceId) ?? null };
+    return { ...base, status, device: this.viewOf(deviceId) };
   }
 
   /** Resolves true as soon as the device state satisfies the expectation, false on timeout. */
