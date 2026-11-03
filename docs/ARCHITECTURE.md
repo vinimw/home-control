@@ -46,6 +46,11 @@ device advertises, validate params strictly, and are routed to Home Assistant th
 table; results are `accepted`, `confirmed` or `failed`. Actions are disabled by default until authentication
 exists. See [DEVICES_API.md](DEVICES_API.md).
 
+## Web app
+
+Mobile-first Next.js shell with Tailwind/shadcn-style primitives, light/dark themes and device controls
+that never claim success the device did not confirm. See [WEB.md](WEB.md).
+
 ## Containers
 
 - One multi-stage Dockerfile per app (`apps/api/Dockerfile`, `apps/web/Dockerfile`), built from the
