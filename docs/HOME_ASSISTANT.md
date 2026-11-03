@@ -98,10 +98,51 @@ OK: {"message":"API running."}
 ```
 
 The check calls `GET /api/` with the bearer token from **inside the API container**, which proves the
-real path the application will use (Docker network → LAN → VM). The WebSocket endpoint used later for
-realtime events is `ws://<vm-ip>:8123/api/websocket`.
+real path the application will use (Docker network → LAN → VM). The realtime client connects to
+`ws://<vm-ip>:8123/api/websocket` (see section 6). Once the API is running, `GET /ha/status` shows whether
+both REST and the realtime connection are healthy.
 
-## 6. Restart and recovery
+## 6. How the API uses Home Assistant
+
+The backend (`apps/api/src/homeassistant/`) owns the integration. The access token exists only in the
+API process: it is never returned by any endpoint, never logged (pino redaction is a second layer) and
+never reaches the browser.
+
+- **REST client**: typed, with a per-request timeout (`HOME_ASSISTANT_TIMEOUT_MS`, default 10 s) and
+  validation of entity ids and service names before building the URL.
+- **Realtime client** (WebSocket): authenticates, subscribes to `state_changed`, and detects dead
+  connections with ping/pong. After any interruption it **reconnects with exponential backoff and
+  jitter** (about 1 s up to 30 s) and subscribes again. Consumers should resync state through REST after
+  a reconnect (use `onConnectionChange`).
+- **Invalid token is fatal**: the client enters `failed` and stops retrying, instead of hammering Home
+  Assistant. Fix the token and restart the API.
+- The API **starts even if Home Assistant is down**; it keeps retrying in the background.
+
+| Endpoint         | Purpose                                                                 |
+| ---------------- | ----------------------------------------------------------------------- |
+| `GET /ha/status` | Integration snapshot (always 200): connection state, health, last error |
+| `GET /ha/ping`   | Live REST probe; returns a structured error when Home Assistant fails   |
+
+Failures use one error shape (`ApiErrorBody` in `packages/shared`):
+
+```json
+{ "error": { "code": "unreachable", "message": "Could not connect to Home Assistant" } }
+```
+
+| Code                                                  | HTTP      | Meaning                                       |
+| ----------------------------------------------------- | --------- | --------------------------------------------- |
+| `not_configured`                                      | 503       | `HOME_ASSISTANT_*` not set                    |
+| `unauthorized`                                        | 502       | Home Assistant rejected the API's token       |
+| `unreachable` / `upstream_error` / `invalid_response` | 502       | Network failure or bad answer from HA         |
+| `timeout`                                             | 504       | Home Assistant did not answer in time         |
+| `not_found` / `bad_request`                           | 404 / 400 | Unknown route or entity / invalid input       |
+| `disconnected`                                        | 503       | Realtime connection is down                   |
+| `internal_error`                                      | 500       | Unexpected failure (details only in the logs) |
+
+`unauthorized` is a 502 on purpose: it is the API's credential towards Home Assistant that failed, not
+the browser's.
+
+## 7. Restart and recovery
 
 - **Mac restarts**: enable auto-login for the dedicated user and add the VM start to **Login Items**
   (UTM can start a VM with `utmctl start "<vm-name>"`). Also add Docker Desktop to Login Items and keep
@@ -116,7 +157,7 @@ realtime events is `ws://<vm-ip>:8123/api/websocket`.
   long-lived token is part of the backup, but create a new one if `pnpm ha:check` reports 401.
 - **VM disk**: keep a copy of the VM image after the initial setup to speed up disaster recovery.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom                                       | Likely cause and fix                                                           |
 | --------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -128,7 +169,7 @@ realtime events is `ws://<vm-ip>:8123/api/websocket`.
 | IP changed after reboot                       | Missing DHCP reservation (section 3).                                          |
 | TV/Echo not discovered                        | VM is not bridged, is on Wi-Fi bridge, or is on another VLAN/subnet.           |
 
-## 8. Known limitations
+## 9. Known limitations
 
 - This setup was documented from the official procedure and was **not** verified against a real HA OS
   VM in this repository's CI; confirm each step on your hardware.
