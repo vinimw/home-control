@@ -53,6 +53,7 @@ docker compose up --build
 - Persistence: the named volume `api-data` is mounted at `/data` in the API container
   (SQLite will live there). Remove it with `docker compose down -v`.
 - Home Assistant is **not** part of this stack; it runs separately in a macOS VM.
+  See [docs/HOME_ASSISTANT.md](docs/HOME_ASSISTANT.md) for the setup and `pnpm ha:check` to test connectivity.
 - Secrets in `.env` are passed only to the API service, never to the web service.
 - Containers run as the non-root `node` user and expose healthchecks.
 

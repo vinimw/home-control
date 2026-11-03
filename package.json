@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "clean": "pnpm -r exec rm -rf dist .next *.tsbuildinfo"
+    "clean": "pnpm -r exec rm -rf dist .next *.tsbuildinfo",
+    "ha:check": "bash scripts/check-home-assistant.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
