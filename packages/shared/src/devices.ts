@@ -47,29 +47,32 @@ export type DeviceCapability =
   | 'activate'
   | 'sensor';
 
-export type DeviceCommandName =
-  | 'turn_on'
-  | 'turn_off'
-  | 'set_brightness'
-  | 'set_color_temperature'
-  | 'set_color'
-  | 'set_volume'
-  | 'volume_up'
-  | 'volume_down'
-  | 'set_mute'
-  | 'play'
-  | 'pause'
-  | 'stop'
-  | 'next_track'
-  | 'previous_track'
-  | 'select_source'
-  | 'set_temperature'
-  | 'set_hvac_mode'
-  | 'open'
-  | 'close'
-  | 'set_position'
-  | 'set_fan_speed'
-  | 'activate';
+export const DEVICE_COMMAND_NAMES = [
+  'turn_on',
+  'turn_off',
+  'set_brightness',
+  'set_color_temperature',
+  'set_color',
+  'set_volume',
+  'volume_up',
+  'volume_down',
+  'set_mute',
+  'play',
+  'pause',
+  'stop',
+  'next_track',
+  'previous_track',
+  'select_source',
+  'set_temperature',
+  'set_hvac_mode',
+  'open',
+  'close',
+  'set_position',
+  'set_fan_speed',
+  'activate',
+] as const;
+
+export type DeviceCommandName = (typeof DEVICE_COMMAND_NAMES)[number];
 
 export interface CommandParam {
   name: string;

@@ -21,7 +21,8 @@
     "env:check": "pnpm --filter @home-control/api env:check",
     "dev:doctor": "bash scripts/doctor.sh",
     "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "device:probe": "node scripts/probe-device.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

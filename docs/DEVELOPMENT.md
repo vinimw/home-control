@@ -58,20 +58,21 @@ later task, which will make them required for the features that use them.
 
 ## Scripts
 
-| Command                          | Description                                                       |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `pnpm dev`                       | Build shared, then run shared (watch), api and web                |
-| `pnpm build`                     | Build all packages                                                |
-| `pnpm check`                     | `format:check` + `lint` + `typecheck` + `build` (run before a PR) |
-| `pnpm format` / `format:check`   | Prettier write / verify                                           |
-| `pnpm lint`                      | ESLint                                                            |
-| `pnpm typecheck`                 | TypeScript for all packages (builds shared first)                 |
-| `pnpm env:init`                  | Create `.env` from `.env.example` if missing                      |
-| `pnpm env:check`                 | Validate the current environment strictly                         |
-| `pnpm dev:doctor`                | Diagnose Node, pnpm, Docker, `.env` and ports                     |
-| `pnpm docker:up` / `docker:down` | Compose stack up (with build) / down                              |
-| `pnpm ha:check`                  | Test API container to Home Assistant connectivity                 |
-| `pnpm clean`                     | Remove build output                                               |
+| Command                          | Description                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| `pnpm dev`                       | Build shared, then run shared (watch), api and web                                   |
+| `pnpm build`                     | Build all packages                                                                   |
+| `pnpm check`                     | `format:check` + `lint` + `typecheck` + `build` (run before a PR)                    |
+| `pnpm format` / `format:check`   | Prettier write / verify                                                              |
+| `pnpm lint`                      | ESLint                                                                               |
+| `pnpm typecheck`                 | TypeScript for all packages (builds shared first)                                    |
+| `pnpm env:init`                  | Create `.env` from `.env.example` if missing                                         |
+| `pnpm env:check`                 | Validate the current environment strictly                                            |
+| `pnpm dev:doctor`                | Diagnose Node, pnpm, Docker, `.env` and ports                                        |
+| `pnpm docker:up` / `docker:down` | Compose stack up (with build) / down                                                 |
+| `pnpm ha:check`                  | Test API container to Home Assistant connectivity                                    |
+| `pnpm device:probe`              | Probe a real device: capability matrix and guided control (see `docs/SAMSUNG_TV.md`) |
+| `pnpm clean`                     | Remove build output                                                                  |
 
 ## Troubleshooting
 
