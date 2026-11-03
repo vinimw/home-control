@@ -46,6 +46,7 @@ export class DeviceRegistry {
   private newEntityTimer: NodeJS.Timeout | null = null;
   private readonly unsubscribers: Array<() => void> = [];
   private readonly changeListeners = new Set<(deviceId: string) => void>();
+  private readonly resyncListeners = new Set<(reason: 'refresh' | 'removed') => void>();
   private started = false;
 
   constructor(private readonly options: DeviceRegistryOptions) {}
@@ -91,6 +92,15 @@ export class DeviceRegistry {
   onChange(listener: (deviceId: string) => void): () => void {
     this.changeListeners.add(listener);
     return () => this.changeListeners.delete(listener);
+  }
+
+  /**
+   * Notified when the device set may have changed in a way a single-device event cannot express: a full
+   * refresh finished, or a device disappeared. Returns an unsubscribe.
+   */
+  onResync(listener: (reason: 'refresh' | 'removed') => void): () => void {
+    this.resyncListeners.add(listener);
+    return () => this.resyncListeners.delete(listener);
   }
 
   get(id: string): Device | undefined {
@@ -161,6 +171,7 @@ export class DeviceRegistry {
         { devices: entries.size, ignored: ignored.size, enrichment: this.enrichment },
         'device registry refreshed',
       );
+      this.notifyResync('refresh');
     } catch (error) {
       this.lastError = toErrorPayload(error);
       logger.warn(
@@ -226,6 +237,7 @@ export class DeviceRegistry {
       if (id) this.entries.delete(id);
       this.deviceIdByEntity.delete(entityId);
       this.ignored.delete(entityId);
+      if (id) this.notifyResync('removed');
       return;
     }
 
@@ -237,6 +249,7 @@ export class DeviceRegistry {
       if (id) this.entries.delete(id);
       this.deviceIdByEntity.delete(entityId);
       this.ignored.add(entityId);
+      if (id) this.notifyResync('removed');
     } else {
       this.entries.set(result.device.id, result);
       this.deviceIdByEntity.set(entityId, result.device.id);
@@ -255,6 +268,16 @@ export class DeviceRegistry {
       } catch (error) {
         // A faulty listener must never stop the live sync.
         this.options.logger.error({ err: String(error) }, 'device change listener threw');
+      }
+    }
+  }
+
+  private notifyResync(reason: 'refresh' | 'removed'): void {
+    for (const listener of this.resyncListeners) {
+      try {
+        listener(reason);
+      } catch (error) {
+        this.options.logger.error({ err: String(error) }, 'device resync listener threw');
       }
     }
   }

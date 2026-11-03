@@ -55,7 +55,8 @@ exists. See [DEVICES_API.md](DEVICES_API.md).
 ## Web app
 
 Mobile-first Next.js shell with Tailwind/shadcn-style primitives, light/dark themes and device controls
-that never claim success the device did not confirm. See [WEB.md](WEB.md).
+that never claim success the device did not confirm. The devices dashboard stays live through a Server-Sent
+Events stream relayed by the web app (the browser never talks to the API directly). See [WEB.md](WEB.md).
 
 ## Containers
 
