@@ -1,7 +1,8 @@
 'use client';
 
 import { memo, useCallback, type ReactNode } from 'react';
-import { Pause, Play, Volume1, Volume2, Zap } from 'lucide-react';
+import Link from 'next/link';
+import { Pause, Play, Tv, Volume1, Volume2, Zap } from 'lucide-react';
 import type { Device } from '@home-control/shared';
 import {
   ActionButton,
@@ -10,6 +11,7 @@ import {
   PowerSwitch,
   type ExecuteCommand,
 } from '@/components/controls';
+import { buttonVariants } from '@/components/ui/button';
 import { FavoriteButton } from './favorite-button';
 
 /** Commands that produce a control. A device with none of them is shown as a compact read-only row. */
@@ -24,6 +26,8 @@ const CONTROL_COMMANDS = new Set([
   'play',
   'pause',
   'activate',
+  'press_key',
+  'launch_app',
 ]);
 
 export function isControllable(device: Device): boolean {
@@ -147,6 +151,13 @@ function DeviceTileImpl({ device, onCommand, onToggleFavorite }: DeviceTileProps
           onCommand={execute}
           commandFor={(next) => ({ command: 'set_mute', params: { muted: next } })}
         />
+      ) : null}
+
+      {has('press_key') || has('launch_app') ? (
+        <Link href={`/devices/${device.id}`} className={buttonVariants({ variant: 'outline' })}>
+          <Tv aria-hidden />
+          Abrir controle remoto
+        </Link>
       ) : null}
 
       {/* One-shot commands share a single wrapping row instead of one full-width button each. */}

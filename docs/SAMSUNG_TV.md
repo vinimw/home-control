@@ -95,13 +95,48 @@ happened in the last column (`✅` / `❌` + a note). Only that column counts as
 - Entity ids (for example `media_player.<name>`) are not secrets and may be recorded below. The API itself
   never exposes them to clients.
 
-## 7. Not supported yet (explicitly excluded)
+## 7. Remote keys, apps and what is still unsupported
 
-- **Navigation keys** (d-pad, OK, back, home, menu): Home Assistant exposes them through the `remote`
-  entity, which the canonical device model does not map yet. They are not offered and must not appear in the
-  UI until the Samsung adapter task adds them.
-- Any command the probe lists under _Commands NOT offered_ for your TV.
-- Power-on when the API does not offer `turn_on` (section 4).
+Added by [#49](https://github.com/vinimw/home-control/issues/49). **Tested here only against a simulated Home
+Assistant**; physical results are listed in section 9 and are only "verified" where marked so.
+
+### Setup used by this household (observed, not universal)
+
+- Home Assistant Core 2026.10.4, HA OS 18.4 (UTM VM). Built-in Samsung integration **plus** HACS
+  _SamsungTV Smart_ 0.14.5 (app launching), launch method `Rest API Call`.
+- `media_player.sala_de_estar_samsung_tv_smart` (SamsungTV Smart) and `remote.sala_de_estar_samsung_tv`
+  (built-in). These names are examples; yours differ.
+
+### How it maps
+
+| Canonical command | Home Assistant call                                                          | Target                           |
+| ----------------- | ---------------------------------------------------------------------------- | -------------------------------- |
+| `press_key`       | `remote.send_command` with `KEY_UP/DOWN/LEFT/RIGHT/ENTER/HOME/RETURN`        | the associated **remote** entity |
+| `launch_app`      | `media_player.play_media` with `media_content_type: app`, `media_content_id` | the media player                 |
+
+- The client sends a key **name** (`up`, `ok`, `home`, `back`...) or an app **name**; codes and ids are looked
+  up on the server in fixed tables. Anything else is `422 invalid_params`.
+- `press_key` is offered only when a remote entity is associated: first an explicit `DEVICE_LINKS` pair, then a
+  visible `remote.*` entity on the **same Home Assistant device**. Never guessed from names.
+- `launch_app` is offered only for apps in `TV_APPS` (default: Netflix, Prime Video, Disney+, YouTube) **that the
+  media player also lists as a source**, and only when it advertises `PLAY_MEDIA`. App ids depend on model and
+  region: override them with `TV_APPS`.
+- Both answer `accepted` (never `confirmed`): the effect cannot be observed from state.
+- Web: the TV card shows **Abrir controle remoto** (`/devices/<id>`): apps, d-pad with OK, Back, Home, inputs
+  and media controls. Inputs that are apps are listed only under Apps.
+
+### Duplicate TV entries
+
+If the built-in integration also creates its own `media_player`, you will see two TVs. Hide the one you do not
+want in Home Assistant (entity settings -> _Visible_ off): hidden entities are not exposed. This app never
+merges them on its own.
+
+### Still unsupported
+
+- Direct text entry (`send_text` showed nothing in Disney+/YouTube search): deferred. Use the d-pad on the
+  on-screen keyboard.
+- Individual HDMI ports unless the media player lists them as sources.
+- Power-on unless Home Assistant advertises it (section 4). The UI never shows a button the API does not offer.
 
 ## 8. Results (fill in from your TV)
 
@@ -137,7 +172,7 @@ happened in the last column (`✅` / `❌` + a note). Only that column counts as
 | Play / pause / stop             | ⬜                      | ⬜                     |                           |
 | Next / previous                 | ⬜                      | ⬜                     |                           |
 | Source select (`select_source`) | ⬜                      | ⬜                     | list the real sources: ⬜ |
-| Navigation keys                 | not offered (section 7) | ⬜                     |                           |
+| Navigation keys                 | `press_key` (section 7) | ⬜                     | see section 9             |
 
 ### Manual control results
 
@@ -145,3 +180,18 @@ Paste the table printed by `pnpm device:probe --execute` here (after reviewing i
 in its last column.
 
 ⬜ _not recorded yet_
+
+## 9. Physical verification of #49 (to complete with the real TV)
+
+| Item                                                                 | Previously observed (during setup) | Verified through Home Control UI |
+| -------------------------------------------------------------------- | ---------------------------------- | -------------------------------- |
+| Home, Back, OK via `remote.send_command` (`KEY_HOME/RETURN/ENTER`)   | ✅ confirmed by the user           | ⬜                               |
+| Netflix, Prime Video, Disney+, YouTube via `play_media`              | ✅ confirmed by the user           | ⬜                               |
+| Up / Down / Left / Right                                             | ⬜ not tested                      | ⬜                               |
+| D-pad moves through an app's on-screen keyboard, OK selects a letter | ⬜                                 | ⬜                               |
+| TV / HDMI source switching                                           | ⬜ not tested                      | ⬜                               |
+| Power-on from standby (SamsungTV Smart `TURN_ON`)                    | ⬜ wake not confirmed              | ⬜                               |
+| Volume, mute, playback, power-off                                    | ⬜                                 | ⬜                               |
+
+Run `pnpm device:probe --type tv --execute --disruptive` (it presses the keys and launches each app) and watch
+the TV.

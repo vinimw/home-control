@@ -1,3 +1,4 @@
+import type { RemoteKey } from '@home-control/shared';
 import type { ProviderBinding } from '../classify.js';
 
 export interface ServiceCall {
@@ -7,14 +8,38 @@ export interface ServiceCall {
 }
 
 type Params = Record<string, unknown>;
-type Builder = (entityId: string, params: Params) => ServiceCall['data'];
+
+/** Server-side configuration the builders may need (never sent by a client). */
+export interface AdapterContext {
+  /** Launchable application name -> application id. */
+  apps?: ReadonlyMap<string, string>;
+}
+
+type Builder = (
+  entityId: string,
+  params: Params,
+  context: AdapterContext,
+) => ServiceCall['data'] | null;
 
 interface Route {
   service: string;
   build: Builder;
   /** Domain whose service to call; defaults to the entity's own domain. */
   domain?: string;
+  /** Entity to target: the device's own (default) or its associated remote-control entity. */
+  target?: 'remote';
 }
+
+/** Samsung key codes. A fixed table: the client picks a key NAME, never a code. */
+const SAMSUNG_KEYS: Readonly<Record<RemoteKey, string>> = {
+  up: 'KEY_UP',
+  down: 'KEY_DOWN',
+  left: 'KEY_LEFT',
+  right: 'KEY_RIGHT',
+  ok: 'KEY_ENTER',
+  home: 'KEY_HOME',
+  back: 'KEY_RETURN',
+};
 
 const entityOnly: Builder = (entityId) => ({ entity_id: entityId });
 
@@ -108,6 +133,26 @@ const ROUTES: Record<string, Record<string, Route>> = {
       build: (e, p) => ({ entity_id: e, percentage: p.percentage }),
     },
   },
+  press_key: {
+    media_player: {
+      domain: 'remote',
+      service: 'send_command',
+      target: 'remote',
+      build: (e, p) => {
+        const key = SAMSUNG_KEYS[p.key as RemoteKey];
+        return key ? { entity_id: e, command: [key] } : null;
+      },
+    },
+  },
+  launch_app: {
+    media_player: {
+      service: 'play_media',
+      build: (e, p, ctx) => {
+        const id = ctx.apps?.get(String(p.app));
+        return id ? { entity_id: e, media_content_type: 'app', media_content_id: id } : null;
+      },
+    },
+  },
   activate: {
     scene: { service: 'turn_on', build: entityOnly },
     script: { service: 'turn_on', build: entityOnly },
@@ -120,12 +165,13 @@ export function toServiceCall(
   binding: ProviderBinding,
   command: string,
   params: Params,
+  context: AdapterContext = {},
 ): ServiceCall | null {
   const route = ROUTES[command]?.[binding.domain];
   if (!route) return null;
-  return {
-    domain: route.domain ?? binding.domain,
-    service: route.service,
-    data: route.build(binding.entityId, params),
-  };
+  const entityId = route.target === 'remote' ? binding.remoteEntityId : binding.entityId;
+  if (!entityId) return null;
+  const data = route.build(entityId, params, context);
+  if (!data) return null;
+  return { domain: route.domain ?? binding.domain, service: route.service, data };
 }

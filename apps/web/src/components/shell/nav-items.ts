@@ -23,6 +23,13 @@ export const PARENT_ROUTES: Readonly<
   '/design': { href: '/settings', label: 'Ajustes', title: 'Componentes' },
 };
 
+/** Parent of the current path: an exact entry, or a device page (`/devices/<id>`) under Devices. */
+export function parentOf(pathname: string): { href: string; label: string } | undefined {
+  if (PARENT_ROUTES[pathname]) return PARENT_ROUTES[pathname];
+  if (/^\/devices\/[^/]+$/.test(pathname)) return { href: '/devices', label: 'Dispositivos' };
+  return undefined;
+}
+
 /** `/` only matches itself; other items also match their sub-routes. */
 export function isActive(pathname: string, href: string): boolean {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);

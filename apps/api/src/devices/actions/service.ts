@@ -4,7 +4,7 @@ import { ApiError, toErrorPayload } from '../../errors.js';
 import type { HomeAssistantService } from '../../homeassistant/service.js';
 import type { Logger } from '../../homeassistant/types.js';
 import type { DeviceRegistry } from '../registry.js';
-import { toServiceCall } from './adapter.js';
+import { toServiceCall, type AdapterContext } from './adapter.js';
 import { expectationFor, type Expectation } from './expectations.js';
 import { validateParams } from './params.js';
 
@@ -14,6 +14,8 @@ export interface DeviceActionServiceOptions {
   logger: Logger;
   /** How results present the device (e.g. with the user's alias). Defaults to the raw registry view. */
   view?: (deviceId: string) => Device | undefined;
+  /** Launchable TV applications (name -> id), from configuration. */
+  apps?: ReadonlyMap<string, string>;
   /** Master switch. Off by default until authentication exists. */
   enabled: boolean;
   /** How long to wait for the resulting state before answering `accepted`. */
@@ -118,7 +120,8 @@ export class DeviceActionService {
     }
 
     const params = validateParams(spec, rawParams);
-    const call = toServiceCall(binding, command, params);
+    const context: AdapterContext = { apps: this.options.apps };
+    const call = toServiceCall(binding, command, params, context);
     if (!call) {
       throw new ApiError(
         'unsupported_action',

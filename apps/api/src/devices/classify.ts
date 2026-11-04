@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
-import type {
-  CommandParam,
-  Device,
-  DeviceAvailability,
-  DeviceCapability,
-  DeviceCommand,
-  DeviceCommandName,
-  DeviceState,
-  DeviceType,
+import {
+  REMOTE_KEYS,
+  type CommandParam,
+  type Device,
+  type DeviceAvailability,
+  type DeviceCapability,
+  type DeviceCommand,
+  type DeviceCommandName,
+  type DeviceState,
+  type DeviceType,
 } from '@home-control/shared';
 import type {
   HassDeviceRegistryEntry,
@@ -19,12 +20,18 @@ import type {
 export interface ProviderBinding {
   entityId: string;
   domain: string;
+  /** Remote-control entity that sends this device's navigation keys, when one is associated. */
+  remoteEntityId?: string;
 }
 
 export interface RegistryContext {
   entity?: HassEntityRegistryEntry;
   device?: HassDeviceRegistryEntry;
   areas?: ReadonlyMap<string, string>;
+  /** Remote entity associated with this entity (same Home Assistant device, or an explicit link). */
+  remoteEntityId?: string;
+  /** Launchable applications by display name (configuration). */
+  apps?: ReadonlyMap<string, string>;
 }
 
 export interface ClassifiedDevice {
@@ -44,6 +51,7 @@ const MEDIA = {
   VOLUME_STEP: 1024,
   SELECT_SOURCE: 2048,
   STOP: 4096,
+  PLAY_MEDIA: 512,
   PLAY: 16384,
 } as const;
 const CLIMATE = { TARGET_TEMPERATURE: 1, TURN_OFF: 128, TURN_ON: 256 } as const;
@@ -190,7 +198,11 @@ function mapSwitch(state: string): Mapping {
   };
 }
 
-function mapMediaPlayer(attrs: Record<string, unknown>, state: string): Mapping {
+function mapMediaPlayer(
+  attrs: Record<string, unknown>,
+  state: string,
+  context: RegistryContext,
+): Mapping {
   const f = features(attrs);
   const capabilities: DeviceCapability[] = [];
   const commands: DeviceCommand[] = [];
@@ -219,6 +231,22 @@ function mapMediaPlayer(attrs: Record<string, unknown>, state: string): Mapping 
       { name: 'source', type: 'string', options: asStringArray(attrs.source_list) },
     ]),
   );
+
+  // Navigation keys go through the associated remote entity: no remote, no keys.
+  if (context.remoteEntityId) {
+    capabilities.push('remote');
+    commands.push(cmd('press_key', [{ name: 'key', type: 'string', options: [...REMOTE_KEYS] }]));
+  }
+
+  // Apps: only those the player itself lists (so they are configured on the TV) and can be launched.
+  if ((f & MEDIA.PLAY_MEDIA) !== 0 && context.apps) {
+    const listed = new Set(asStringArray(attrs.source_list).map((name) => name.toLowerCase()));
+    const launchable = [...context.apps.keys()].filter((name) => listed.has(name.toLowerCase()));
+    if (launchable.length > 0) {
+      capabilities.push('apps');
+      commands.push(cmd('launch_app', [{ name: 'app', type: 'string', options: launchable }]));
+    }
+  }
 
   const deviceClass = asString(attrs.device_class);
   const type: DeviceType =
@@ -362,7 +390,12 @@ function mapSensor(
   };
 }
 
-function mapDomain(domain: string, attrs: Record<string, unknown>, state: string): Mapping | null {
+function mapDomain(
+  domain: string,
+  attrs: Record<string, unknown>,
+  state: string,
+  context: RegistryContext,
+): Mapping | null {
   switch (domain) {
     case 'light':
       return mapLight(attrs, state);
@@ -370,7 +403,7 @@ function mapDomain(domain: string, attrs: Record<string, unknown>, state: string
     case 'input_boolean':
       return mapSwitch(state);
     case 'media_player':
-      return mapMediaPlayer(attrs, state);
+      return mapMediaPlayer(attrs, state, context);
     case 'climate':
       return mapClimate(attrs, state);
     case 'cover':
@@ -424,7 +457,7 @@ export function classifyEntity(
   let state: DeviceState;
 
   if (availability === 'available') {
-    const mapping = mapDomain(domain, attrs, rawState);
+    const mapping = mapDomain(domain, attrs, rawState, context);
     if (!mapping) return null;
     ({ type, capabilities, commands, state } = mapping);
   } else if (previous) {
@@ -466,6 +499,12 @@ export function classifyEntity(
       commands,
       state,
     },
-    binding: { entityId, domain },
+    binding: {
+      entityId,
+      domain,
+      ...(context.remoteEntityId && domain === 'media_player'
+        ? { remoteEntityId: context.remoteEntityId }
+        : {}),
+    },
   };
 }

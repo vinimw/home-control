@@ -15,6 +15,10 @@ export interface DeviceRegistryOptions {
   logger: Logger;
   /** Full resync interval. Needed because room/name changes do not emit state events. */
   refreshIntervalMs: number;
+  /** Explicit media player -> remote entity pairs (configuration), used before automatic matching. */
+  links?: Readonly<Record<string, string>>;
+  /** Launchable applications by display name. */
+  apps?: ReadonlyMap<string, string>;
 }
 
 interface Entry {
@@ -201,7 +205,47 @@ export class DeviceRegistry {
   private contextFor(entityId: string, snapshot: RegistrySnapshot): RegistryContext {
     const entity = snapshot.entities.get(entityId);
     const device = entity?.device_id ? snapshot.devices.get(entity.device_id) : undefined;
-    return { entity, device, areas: snapshot.areas };
+    return {
+      entity,
+      device,
+      areas: snapshot.areas,
+      remoteEntityId: this.remoteFor(entityId, entity, snapshot),
+      apps: this.options.apps,
+    };
+  }
+
+  private remotesByDevice = new WeakMap<RegistrySnapshot, Map<string, string>>();
+
+  /**
+   * The remote-control entity that drives `entityId`: an explicit configured link, otherwise a visible
+   * `remote.*` entity of the same Home Assistant device. Never guessed from names.
+   */
+  private remoteFor(
+    entityId: string,
+    entity: RegistryContext['entity'],
+    snapshot: RegistrySnapshot,
+  ): string | undefined {
+    if (!entityId.startsWith('media_player.')) return undefined;
+    const linked = this.options.links?.[entityId];
+    if (linked) return snapshot.entities.get(linked)?.disabled_by ? undefined : linked;
+    if (!entity?.device_id) return undefined;
+
+    let index = this.remotesByDevice.get(snapshot);
+    if (!index) {
+      index = new Map();
+      for (const candidate of snapshot.entities.values()) {
+        if (
+          candidate.entity_id.startsWith('remote.') &&
+          candidate.device_id &&
+          !candidate.disabled_by &&
+          !index.has(candidate.device_id)
+        ) {
+          index.set(candidate.device_id, candidate.entity_id);
+        }
+      }
+      this.remotesByDevice.set(snapshot, index);
+    }
+    return index.get(entity.device_id);
   }
 
   /** Classifies one entity; a malformed entity is ignored instead of breaking the whole sync. */

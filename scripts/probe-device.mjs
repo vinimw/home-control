@@ -298,6 +298,20 @@ if (opts.execute) {
   }
 
   if (opts.disruptive) {
+    // Navigation changes what is on the TV screen: it only runs in the disruptive pass.
+    if (has('press_key')) {
+      for (const key of ['right', 'left', 'down', 'up', 'home', 'back']) {
+        await act(`Key ${key}`, 'press_key', { key });
+        await sleep(600);
+      }
+      await act('Key ok (selects whatever is focused)', 'press_key', { key: 'ok' });
+    }
+    if (has('launch_app')) {
+      const spec = device.commands.find((c) => c.name === 'launch_app');
+      for (const app of spec?.params?.[0]?.options ?? []) {
+        await act(`Launch ${app}`, 'launch_app', { app }, { settle: 4000 });
+      }
+    }
     if (has('select_source') && original.source) {
       // Re-selecting the current source should not change what is on screen.
       await act('Select current source', 'select_source', { source: original.source });

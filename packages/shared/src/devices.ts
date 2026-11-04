@@ -45,7 +45,15 @@ export type DeviceCapability =
   | 'position'
   | 'fan_speed'
   | 'activate'
-  | 'sensor';
+  | 'sensor'
+  /** Navigation keys (arrows, OK, Home, Back) sent through a remote-control entity. */
+  | 'remote'
+  /** Launching applications installed on the device. */
+  | 'apps';
+
+/** Keys a remote-capable device can be sent. Each device only advertises the ones it can really press. */
+export const REMOTE_KEYS = ['up', 'down', 'left', 'right', 'ok', 'home', 'back'] as const;
+export type RemoteKey = (typeof REMOTE_KEYS)[number];
 
 export const DEVICE_COMMAND_NAMES = [
   'turn_on',
@@ -70,6 +78,8 @@ export const DEVICE_COMMAND_NAMES = [
   'set_position',
   'set_fan_speed',
   'activate',
+  'press_key',
+  'launch_app',
 ] as const;
 
 export type DeviceCommandName = (typeof DEVICE_COMMAND_NAMES)[number];
