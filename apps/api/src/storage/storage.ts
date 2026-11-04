@@ -1,5 +1,6 @@
 import { IN_MEMORY, openDatabase, type Database } from './database.js';
 import { StorageError } from './errors.js';
+import { SqliteDeviceLayoutRepository, type DeviceLayoutRepository } from './device-layout.js';
 import { runMigrations, type MigrationResult } from './migrations.js';
 import type {
   AlexaCommandRepository,
@@ -29,6 +30,7 @@ export interface StorageSummary {
 
 /** The API's persistent storage: opens the database, migrates it and exposes the repositories. */
 export class Storage {
+  readonly layout: DeviceLayoutRepository;
   readonly rooms: RoomRepository;
   readonly deviceSettings: DeviceSettingsRepository;
   readonly settings: SettingsRepository;
@@ -41,6 +43,7 @@ export class Storage {
     private readonly db: Database,
     readonly migration: MigrationResult,
   ) {
+    this.layout = new SqliteDeviceLayoutRepository(db);
     this.rooms = new SqliteRoomRepository(db);
     this.deviceSettings = new SqliteDeviceSettingsRepository(db);
     this.settings = new SqliteSettingsRepository(db);

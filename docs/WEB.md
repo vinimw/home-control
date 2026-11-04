@@ -192,3 +192,23 @@ Heights are the total page height in CSS pixels at 390 px width:
 Note: switches and slider thumbs still measure 28 / 24 px by bounding box; their tappable area is 44 px
 through a pseudo-element, verified with `elementFromPoint`. The `/devices` height depends on how many
 devices have controls, so it varies with the data (this run: 19 devices, 5 of them read-only rows).
+
+## Card ordering (`/devices`, #54)
+
+**Organizar cartões** enters layout-edit mode. Drag only by the handle (mouse, pen or touch), drop over
+another card in the same room, or use the **Mover … para antes/depois** buttons with touch or keyboard.
+Escape cancels a drag. Card controls and links are inert while editing; dragging never sends device commands.
+Read-only sensor rows retain their compact presentation outside the movable card grid.
+
+Each completed move saves automatically; pointer movement itself makes no requests. Home Assistant and
+custom Alexa cards share the same responsive order, applied within each room. Filters expose a subset:
+only the visible cards exchange slots, preserving hidden cards' relative order. Newly encountered ids are
+appended alphabetically after saved ids (id breaks name ties). Missing/deleted ids stay in the saved list
+without rendering a placeholder, so temporarily missing devices recover their placement. Reordering does
+not change room assignments. Device state events do not replace layout metadata.
+
+The initial layout loads alongside the device lists on the server. `GET/PATCH /api/device-layout` relays
+only `/device-layout`, with the existing session, CSRF, origin checks and 16 KB body limit. A move displays
+**Salvando ordem…** and temporarily blocks other moves. A lost/failed response may already have committed:
+the proposal remains visible with an explicit warning, and further editing is blocked until **Recarregar
+ordem salva** reads the server's authoritative order. A stale tab cannot overwrite newer revisions.

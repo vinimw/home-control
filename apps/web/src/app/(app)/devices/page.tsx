@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { DevicesDashboard } from '@/components/devices/devices-dashboard';
-import { getCustomDevices, getDevices } from '@/lib/api';
+import { getCustomDevices, getDeviceLayout, getDevices } from '@/lib/api';
 
 export const metadata: Metadata = { title: 'Dispositivos' };
 
@@ -8,6 +8,10 @@ export const metadata: Metadata = { title: 'Dispositivos' };
 export const dynamic = 'force-dynamic';
 
 export default async function DevicesPage() {
-  const [devices, custom] = await Promise.all([getDevices(), getCustomDevices()]);
-  return <DevicesDashboard initial={devices} initialCustom={custom} />;
+  const [devices, custom, layout] = await Promise.all([
+    getDevices(),
+    getCustomDevices(),
+    getDeviceLayout(),
+  ]);
+  return <DevicesDashboard initial={devices} initialCustom={custom} initialLayout={layout} />;
 }

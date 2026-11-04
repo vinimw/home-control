@@ -9,3 +9,5 @@ export * from './health.js';
 export * from './homeassistant.js';
 export * from './settings.js';
 export * from './spotify.js';
+
+export * from './device-layout.js';

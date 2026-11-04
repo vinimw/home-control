@@ -8,6 +8,7 @@ import type {
   CustomDeviceListResponse,
   Device,
   DeviceListResponse,
+  DeviceLayout,
 } from '@home-control/shared';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,8 @@ import { CustomDeviceTile } from './custom-device-tile';
 import { DeviceRow } from './device-row';
 import { DeviceTile, isControllable } from './device-tile';
 import { useDevices, type Connection } from './use-devices';
+import { OrderingGrid } from './ordering-grid';
+import { moveVisibleCard, useDeviceLayout } from './use-device-layout';
 
 const CONNECTION_BADGE: Record<
   Connection,
@@ -65,11 +68,16 @@ type Entry =
 export function DevicesDashboard({
   initial,
   initialCustom = null,
+  initialLayout = null,
 }: {
   initial: DeviceListResponse | null;
   initialCustom?: CustomDeviceListResponse | null;
+  initialLayout?: DeviceLayout | null;
 }) {
   const view = useDevices(initial);
+  const ordering = useDeviceLayout(initialLayout);
+  const [editing, setEditing] = useState(false);
+  const [moveNotice, setMoveNotice] = useState('');
   const { devices, summary, loaded, stale, connection, updatedAt, refreshing, refresh, apply } =
     view;
   const [filter, setFilter] = useState<Filter>('all');
@@ -173,7 +181,27 @@ export function DevicesDashboard({
         .filter((entry) => roomId === 'all' || entry.room?.id === roomId),
     [entries, filter, roomId],
   );
-  const groups = useMemo(() => groupByRoom(visible), [visible]);
+  const entryId = (entry: Entry) => (entry.kind === 'custom' ? entry.custom.id : entry.device.id);
+  const cardEntries = entries.filter(
+    (entry) => entry.kind === 'custom' || isControllable(entry.device),
+  );
+  const fullOrder = [...(ordering.layout?.cardIds ?? [])];
+  const known = new Set(fullOrder);
+  for (const entry of [...cardEntries].sort(
+    (a, b) => a.name.localeCompare(b.name, 'pt-BR') || entryId(a).localeCompare(entryId(b)),
+  )) {
+    if (!known.has(entryId(entry))) {
+      fullOrder.push(entryId(entry));
+      known.add(entryId(entry));
+    }
+  }
+  const ranks = new Map(fullOrder.map((id, index) => [id, index]));
+  const groups = groupByRoom(visible).map((group) => ({
+    ...group,
+    items: group.items.sort(
+      (a, b) => (ranks.get(entryId(a)) ?? Infinity) - (ranks.get(entryId(b)) ?? Infinity),
+    ),
+  }));
 
   const filters: Array<{ id: Filter; label: string }> = [
     { id: 'all', label: 'Todos' },
@@ -355,6 +383,57 @@ export function DevicesDashboard({
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={editing ? 'default' : 'outline'}
+              aria-pressed={editing}
+              disabled={ordering.status !== 'ready'}
+              onClick={() => setEditing(!editing)}
+            >
+              {editing ? 'Concluir organização' : 'Organizar cartões'}
+            </Button>
+            <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+              {ordering.status === 'saving'
+                ? 'Salvando ordem…'
+                : ordering.status === 'loading'
+                  ? 'Carregando ordem…'
+                  : ordering.status === 'ready'
+                    ? moveNotice
+                      ? `${moveNotice} Ordem salva.`
+                      : ''
+                    : ''}
+            </p>
+          </div>
+          {editing ? (
+            <p className="text-sm text-muted-foreground">
+              Arraste pela alça até outro cartão do mesmo cômodo ou use as setas para mover. Os
+              controles dos cartões ficam desativados durante a organização. Cada movimento é salvo
+              automaticamente.
+            </p>
+          ) : null}
+          {ordering.status === 'error' ? (
+            <Alert variant="danger">
+              <CircleAlert aria-hidden />
+              <div>
+                <AlertTitle>Não foi possível confirmar a ordem no servidor</AlertTitle>
+                <AlertDescription>
+                  A ordem exibida pode não estar salva ou ter sido alterada em outra aba. Recarregue
+                  a ordem salva antes de continuar organizando.
+                </AlertDescription>
+                <Button
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => {
+                    setMoveNotice('');
+                    void ordering.reload();
+                  }}
+                >
+                  Recarregar ordem salva
+                </Button>
+              </div>
+            </Alert>
+          ) : null}
+
           {visible.length === 0 ? (
             <EmptyState
               icon={SearchX}
@@ -373,38 +452,49 @@ export function DevicesDashboard({
             </EmptyState>
           ) : (
             groups.map((group) => {
-              const customs = group.items.flatMap((entry) =>
-                entry.kind === 'custom' ? [entry.custom] : [],
+              const cards = group.items.filter(
+                (entry) => entry.kind === 'custom' || isControllable(entry.device),
               );
-              const real = group.items.flatMap((entry) =>
-                entry.kind === 'device' ? [entry.device] : [],
+              const readOnly = group.items.flatMap((entry) =>
+                entry.kind === 'device' && !isControllable(entry.device) ? [entry.device] : [],
               );
-              const controllable = real.filter(isControllable);
-              const readOnly = real.filter((device) => !isControllable(device));
               return (
                 <section key={group.room} aria-label={group.room} className="flex flex-col gap-2">
                   <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     {group.room}
                   </h2>
-                  {controllable.length + customs.length > 0 ? (
-                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {controllable.map((device) => (
-                        <DeviceTile
-                          key={device.id}
-                          device={device}
-                          onCommand={onCommand}
-                          onToggleFavorite={onToggleFavorite}
-                        />
-                      ))}
-                      {customs.map((card) => (
-                        <CustomDeviceTile
-                          key={card.id}
-                          device={card}
-                          onChange={applyCustom}
-                          onToggleFavorite={onToggleCustomFavorite}
-                        />
-                      ))}
-                    </div>
+                  {cards.length > 0 ? (
+                    <OrderingGrid
+                      editing={editing}
+                      disabled={ordering.status !== 'ready'}
+                      items={cards.map((entry) => ({
+                        id: entryId(entry),
+                        name: entry.name,
+                        content:
+                          entry.kind === 'device' ? (
+                            <DeviceTile
+                              device={entry.device}
+                              onCommand={onCommand}
+                              onToggleFavorite={onToggleFavorite}
+                            />
+                          ) : (
+                            <CustomDeviceTile
+                              device={entry.custom}
+                              onChange={applyCustom}
+                              onToggleFavorite={onToggleCustomFavorite}
+                            />
+                          ),
+                      }))}
+                      onMove={(source, target) => {
+                        const ids = cards.map(entryId);
+                        const updated = moveVisibleCard(fullOrder, ids, source, target);
+                        if (updated === fullOrder) return;
+                        setMoveNotice(
+                          `${cards.find((entry) => entryId(entry) === source)?.name}: posição ${ids.indexOf(target) + 1} de ${ids.length}.`,
+                        );
+                        void ordering.save(updated);
+                      }}
+                    />
                   ) : null}
                   {readOnly.length > 0 ? (
                     <Card>

@@ -134,6 +134,19 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    id: 6,
+    name: 'device_card_layout',
+    sql: `
+      -- Stable ids survive discovery gaps. No device state or room assignment is stored here.
+      CREATE TABLE device_layout (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        revision INTEGER NOT NULL DEFAULT 0,
+        card_ids TEXT NOT NULL DEFAULT '[]'
+      );
+      INSERT INTO device_layout (id) VALUES (1);
+    `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');
