@@ -127,10 +127,14 @@ keeps it live:
    relayed to the API. The browser never talks to the API directly and `API_INTERNAL_URL` never reaches it.
    Only the fixed routes under `app/api/devices` exist (list, events, `:id/actions`, `:id/settings`); the
    relay validates the device id, limits the body to 16 KB and exposes no other API path.
-2. `useDevices` loads the list, opens the stream and, on every (re)connection, reloads the list before
-   trusting events. A list response never overwrites a device that changed after the request started.
+2. `useDevices` starts with the server-rendered list. The SSE opening event supplies a fresh cached
+   snapshot on every (re)connection, avoiding a second list request and closing the hydration gap.
+   Older APIs without snapshots fall back to a list request. An earlier request cannot overwrite a
+   newer stream snapshot or device event.
 3. If the stream drops the badge says **Reconectando...**, a banner explains it and the list is polled every
-   10 s until the stream is back (every 60 s while live, as a safety net). **Atualizar** forces a reload.
+   10 s until the stream is back (every 60 s while live, as a safety net). **Atualizar** forces a reload of the API cache, without polling Home Assistant or Amazon.
+   Hidden tabs close their event stream and skip polling; returning to the tab opens one stream and
+   receives a new snapshot.
 4. If the API cannot be reached, the data on screen is marked as possibly out of date (with the time of the
    last good update); with no data at all an error state offers a retry. Nothing is shown as fresh when it
    is not.
@@ -227,3 +231,11 @@ in one revision-checked SQLite transaction. Home Assistant areas are localized b
 reusing matching local rooms; the original source area remains available after its last card leaves.
 These changes organize this app only: no device command or Home Assistant area-edit request is sent.
 Mouse, pen and touch share the handle gesture; Escape cancels it. The destination section is highlighted.
+
+### Connection budget
+
+Page loads, layout editing, favorites and the browser's safety polling read the API registry; they never
+request an Alexa integration update. The backend owns one Home Assistant WebSocket per API process and
+refreshes its registry from HA's stored states every five minutes by default. Alexa's separate cloud
+polling is controlled by the Home Assistant integration, not by browser traffic. Reducing page traffic
+alone does not eliminate Amazon rate limiting.

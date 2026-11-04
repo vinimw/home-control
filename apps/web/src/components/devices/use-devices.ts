@@ -1,7 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Device, DeviceListResponse, DeviceRegistrySummary } from '@home-control/shared';
+import type {
+  Device,
+  DeviceListResponse,
+  DeviceRegistrySummary,
+  DeviceReadyEvent,
+} from '@home-control/shared';
 import { DEVICE_EVENTS_URL, fetchDevices } from '@/lib/devices-client';
 
 /**
@@ -52,6 +57,7 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
   const touchedAt = useRef(new Map<string, number>());
   const connectionRef = useRef<Connection>('connecting');
   const inFlight = useRef<Promise<void> | null>(null);
+  const snapshotGeneration = useRef(0);
 
   const apply = useCallback((device: Device) => {
     touchedAt.current.set(device.id, Date.now());
@@ -63,8 +69,10 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
     // Concurrent triggers (reconnect + poll + focus) share one request.
     inFlight.current ??= (async () => {
       const startedAt = Date.now();
+      const generation = snapshotGeneration.current;
       try {
         const list = await fetchDevices();
+        if (generation !== snapshotGeneration.current) return;
         setById((current) => {
           const next = new Map<string, Device>();
           for (const device of list.devices) {
@@ -83,7 +91,7 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
         setStale(false);
         setUpdatedAt(new Date());
       } catch {
-        setStale(true);
+        if (generation === snapshotGeneration.current) setStale(true);
       }
     })().finally(() => {
       inFlight.current = null;
@@ -100,12 +108,6 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
     }
   }, [load]);
 
-  // Initial load when the server could not provide the list.
-  useEffect(() => {
-    if (initial === null) void load();
-    // Runs once on mount: `initial` is only the starting value.
-  }, []);
-
   // Live stream with reconnection.
   useEffect(() => {
     let source: EventSource | null = null;
@@ -119,14 +121,29 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
     };
 
     const open = () => {
-      if (disposed) return;
+      if (disposed || document.visibilityState !== 'visible') return;
+      if (source && source.readyState !== EventSource.CLOSED) return;
       source = new EventSource(DEVICE_EVENTS_URL);
 
-      source.addEventListener('ready', () => {
+      source.addEventListener('ready', (event) => {
         attempts = 0;
         setState('live');
-        // Events may have been missed while disconnected: reload before trusting the stream.
-        void load();
+        try {
+          const { snapshot } = JSON.parse((event as MessageEvent<string>).data) as DeviceReadyEvent;
+          if (!snapshot || !Array.isArray(snapshot.devices) || !snapshot.summary)
+            throw new Error('Missing snapshot');
+          // Invalidate earlier list requests so they cannot overwrite this newer baseline.
+          snapshotGeneration.current += 1;
+          touchedAt.current.clear();
+          setById(new Map(snapshot.devices.map((device) => [device.id, device])));
+          setSummary(snapshot.summary);
+          setLoaded(true);
+          setStale(false);
+          setUpdatedAt(new Date());
+        } catch {
+          // Compatibility with an older server, or malformed data: request a trusted baseline.
+          void load();
+        }
       });
       source.addEventListener('device', (event) => {
         try {
@@ -137,6 +154,7 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
       });
       source.addEventListener('resync', () => void load());
       source.addEventListener('error', () => {
+        if (connectionRef.current !== 'reconnecting') void load();
         setState('reconnecting');
         // The browser retries by itself unless the server answered with an error status.
         if (source?.readyState === EventSource.CLOSED) {
@@ -148,15 +166,28 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
       });
     };
 
+    const pause = () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      source?.close();
+      source = null;
+      setState('connecting');
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') open();
+      else pause();
+    };
     open();
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       disposed = true;
       if (retryTimer) clearTimeout(retryTimer);
       source?.close();
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [apply, load]);
 
-  // Polling fallback, plus a reload whenever the tab becomes visible again.
+  // Safety polling only while visible. Foreground resumption gets its baseline from the SSE snapshot.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const schedule = () => {
@@ -166,16 +197,9 @@ export function useDevices(initial: DeviceListResponse | null): DevicesView {
         schedule();
       }, wait);
     };
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
     schedule();
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [load]);
+    return () => clearTimeout(timer);
+  }, [load, connection]);
 
   return {
     devices: [...byId.values()],

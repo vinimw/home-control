@@ -1,11 +1,12 @@
 /**
  * Realtime stream of device changes (`GET /devices/events`, Server-Sent Events).
  *
- * The stream is a hint channel, not the source of truth: a client loads `GET /devices` first and again after
- * every (re)connection, then applies these events on top. Events can be missed (network, restarts), which
+ * The opening event includes the API's current cached snapshot; clients apply subsequent events on top.
+ * Older servers without snapshots are supported by loading `GET /devices` after (re)connection. Events can be missed (network, restarts), which
  * is why `resync` exists and why a client must also be able to fall back to plain polling.
  */
 import type { Device } from './devices.js';
+import type { DeviceListResponse } from './actions.js';
 
 export const API_DEVICE_EVENTS_PATH = '/devices/events';
 
@@ -17,6 +18,8 @@ export type DeviceEventName = (typeof DEVICE_EVENT_NAMES)[number];
 /** Sent once when the stream opens. */
 export interface DeviceReadyEvent {
   serverTime: string;
+  /** Cached API snapshot captured when subscribing. Optional for older API versions. */
+  snapshot?: DeviceListResponse;
 }
 
 /** A single device changed (state, availability, alias, favorite...). Carries the full current device. */

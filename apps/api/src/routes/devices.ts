@@ -89,8 +89,13 @@ export function registerDeviceRoutes(app: FastifyInstance): void {
     streams.add(close);
     // Tells the browser to wait 3 s before reconnecting, then announces the stream.
     raw.write('retry: 3000\n\n');
-    send('ready', { serverTime: new Date().toISOString() });
     unsubscribe = app.deviceEvents.subscribe((message) => send(message.event, message.data));
+    // Synchronous cached reads: the browser receives a current baseline without a second GET or any
+    // Home Assistant/Amazon request. No event callback can interleave before this snapshot is sent.
+    send('ready', {
+      serverTime: new Date().toISOString(),
+      snapshot: { devices: app.catalog.list(), summary: app.devices.summary() },
+    });
     // Comment lines keep idle connections alive through proxies and let the client notice a dead link.
     const sessionId = request.authSession?.idHash;
     heartbeat = setInterval(() => {

@@ -129,20 +129,23 @@ Error messages name the field and the rule but never echo submitted values.
 
 ## Realtime events (`GET /devices/events`)
 
-A Server-Sent Events stream (`text/event-stream`). It is a **hint channel, not the source of truth**: a client
-loads `GET /devices` first and again after every (re)connection, then applies events on top.
+A Server-Sent Events stream (`text/event-stream`). Its opening event includes a current snapshot of the
+API registry, followed by incremental events. Snapshot construction is synchronous with subscription and
+reads cached device data only; it does not poll Home Assistant or Amazon. Clients talking to an older API
+without snapshots fall back to `GET /devices` on (re)connection.
 
-| Event    | `data`                                          | Meaning                                                                |
-| -------- | ----------------------------------------------- | ---------------------------------------------------------------------- |
-| `ready`  | `{ serverTime }`                                | The stream is open. Reload the list now (events may have been missed). |
-| `device` | a full `Device` (same shape as `GET /devices`)  | One device changed: state, availability, alias, favorite or room.      |
-| `resync` | `{ reason: refresh\|removed\|rooms\|settings }` | Devices were added/removed or rooms changed: reload the list.          |
+| Event    | `data`                                           | Meaning                                                                      |
+| -------- | ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `ready`  | `{ serverTime, snapshot: { devices, summary } }` | Replace the local baseline with the snapshot, then apply incremental events. |
+| `device` | a full `Device` (same shape as `GET /devices`)   | One device changed: state, availability, alias, favorite or room.            |
+| `resync` | `{ reason: refresh\|removed\|rooms\|settings }`  | Devices were added/removed or rooms changed: reload the list.                |
 
 - `: ping` comment lines are sent every 15 s as a heartbeat; `retry: 3000` tells the browser how long to wait.
 - Events carry only the public device view: no provider identifiers.
 - At most 50 streams are open at once (`429 too_many_requests` beyond that). A client that stops reading is
   disconnected instead of buffered without limit.
-- The stream is read-only and, like the other `GET` endpoints, unauthenticated (see the security note).
+- The stream is read-only and requires a session. Hidden browser tabs close their upstream stream;
+  foreground resumption opens one new stream and receives a fresh snapshot.
 
 ## Aliases, favorites and rooms
 
