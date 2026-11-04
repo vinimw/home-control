@@ -2,7 +2,7 @@
 
 import { memo, useCallback, type ReactNode } from 'react';
 import Link from 'next/link';
-import { Pause, Play, Tv, Volume1, Volume2, Zap } from 'lucide-react';
+import { Mic, Pause, Play, Tv, Volume1, Volume2, Zap } from 'lucide-react';
 import type { Device } from '@home-control/shared';
 import {
   ActionButton,
@@ -157,6 +157,13 @@ function DeviceTileImpl({ device, onCommand, onToggleFavorite }: DeviceTileProps
         <Link href={`/devices/${device.id}`} className={buttonVariants({ variant: 'outline' })}>
           <Tv aria-hidden />
           Abrir controle remoto
+        </Link>
+      ) : null}
+
+      {device.capabilities.includes('voice_command') ? (
+        <Link href={`/echo?device=${device.id}`} className={buttonVariants({ variant: 'outline' })}>
+          <Mic aria-hidden />
+          Comandos da Alexa
         </Link>
       ) : null}
 

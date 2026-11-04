@@ -25,6 +25,9 @@ export function isDeviceId(value: string): boolean {
   return DEVICE_ID.test(value);
 }
 
+export const COMMAND_ID = /^ac_[0-9a-f]{12}$/;
+export const isCommandId = (value: string): boolean => COMMAND_ID.test(value);
+
 export const devicePath = (suffix = ''): string => `${API_DEVICES_PATH}${suffix}`;
 
 /** Headers that identify the user to the API. Nothing else from the browser is forwarded. */
@@ -70,7 +73,7 @@ export function crossSiteRejection(request: Request): Response | null {
 export async function relayJson(
   request: Request,
   path: string,
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
 ): Promise<Response> {
   let body: string | undefined;
   if (method !== 'GET') {

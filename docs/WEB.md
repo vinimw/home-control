@@ -151,6 +151,12 @@ only what `device.commands` lists (keys, apps, inputs, volume...), with one shar
 "confirmado" only when the API did. Buttons are at least 44px, the d-pad is a 3x3 grid, and the header back
 control leads to Dispositivos. Unavailable TVs get disabled controls and an explanation.
 
+## Echo page (`/echo`)
+
+Playback/volume from the Echo's own commands, a saved-command dropdown with an explicit **Executar comando**
+button, and a command manager with **Testar comando** before **Salvar comando** (see [ALEXA.md](ALEXA.md)).
+Alexa results use their own status line with no "confirmado": acceptance never proves what Alexa did.
+
 ## Adding a component
 
 1. Put primitives in `components/ui` using `cva` + `cn`; keep 44 px touch targets on interactive elements.

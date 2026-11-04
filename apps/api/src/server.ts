@@ -8,6 +8,8 @@ import { DeviceCatalog } from './devices/catalog.js';
 import { DeviceEventHub } from './devices/events.js';
 import { DeviceRegistry } from './devices/registry.js';
 import { HomeAssistantService, type HomeAssistantSettings } from './homeassistant/service.js';
+import { AlexaCommandService } from './alexa/service.js';
+import { registerAlexaRoutes } from './routes/alexa.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerRoomRoutes } from './routes/rooms.js';
@@ -28,6 +30,7 @@ declare module 'fastify' {
     catalog: DeviceCatalog;
     deviceEvents: DeviceEventHub;
     deviceActions: DeviceActionService;
+    alexa: AlexaCommandService;
   }
 }
 
@@ -127,6 +130,15 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       confirmTimeoutMs: options.deviceActions?.confirmTimeoutMs,
     }),
   );
+  app.decorate(
+    'alexa',
+    new AlexaCommandService({
+      registry: app.devices,
+      homeAssistant: app.homeAssistant,
+      logger: app.log,
+      enabled: () => app.deviceActions.enabled,
+    }),
+  );
   registerAuthGate(app);
   const purgeTimer = setInterval(() => app.auth.purgeExpired(), 60 * 60 * 1000);
   purgeTimer.unref();
@@ -175,6 +187,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerRoomRoutes(app);
   registerSettingsRoutes(app);
   registerSpotifyRoutes(app);
+  registerAlexaRoutes(app);
 
   return app;
 }

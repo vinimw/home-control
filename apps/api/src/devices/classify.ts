@@ -22,6 +22,8 @@ export interface ProviderBinding {
   domain: string;
   /** Remote-control entity that sends this device's navigation keys, when one is associated. */
   remoteEntityId?: string;
+  /** Home Assistant device id: what `alexa_devices.send_text_command` targets. Echo devices only. */
+  haDeviceId?: string;
 }
 
 export interface RegistryContext {
@@ -422,6 +424,16 @@ function mapDomain(
   }
 }
 
+/**
+ * The Home Assistant device id of an Echo: a media player whose device is made by Amazon. Alexa text
+ * commands target this id, so a device without it is never offered as a target.
+ */
+function echoDeviceId(domain: string, context: RegistryContext): string | undefined {
+  if (domain !== 'media_player') return undefined;
+  const manufacturer = asString(context.device?.manufacturer)?.toLowerCase();
+  return manufacturer === 'amazon' ? context.device?.id : undefined;
+}
+
 /** Default type for a supported domain, used when a device is unavailable and was never seen healthy. */
 const typeByDomain = (domain: string): DeviceType =>
   domain === 'input_boolean' ? 'switch' : (domain as DeviceType);
@@ -460,6 +472,7 @@ export function classifyEntity(
     const mapping = mapDomain(domain, attrs, rawState, context);
     if (!mapping) return null;
     ({ type, capabilities, commands, state } = mapping);
+    if (echoDeviceId(domain, context)) capabilities = [...capabilities, 'voice_command'];
   } else if (previous) {
     ({ type, capabilities, commands } = previous);
     state = emptyState();
@@ -502,6 +515,7 @@ export function classifyEntity(
     binding: {
       entityId,
       domain,
+      ...(echoDeviceId(domain, context) ? { haDeviceId: echoDeviceId(domain, context) } : {}),
       ...(context.remoteEntityId && domain === 'media_player'
         ? { remoteEntityId: context.remoteEntityId }
         : {}),

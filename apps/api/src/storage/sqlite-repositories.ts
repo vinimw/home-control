@@ -1,8 +1,15 @@
 import { randomBytes } from 'node:crypto';
-import { DEFAULT_APP_SETTINGS, type AppSettings, type Room } from '@home-control/shared';
+import {
+  DEFAULT_APP_SETTINGS,
+  type AlexaCommand,
+  type AlexaCommandInput,
+  type AppSettings,
+  type Room,
+} from '@home-control/shared';
 import type { Database } from './database.js';
 import {
   DuplicateRoomError,
+  type AlexaCommandRepository,
   type AuthRepository,
   type SpotifyConnectionRecord,
   type SpotifyRepository,
@@ -396,5 +403,77 @@ export class SqliteSpotifyRepository implements SpotifyRepository {
 
   clear(): void {
     this.db.exec('DELETE FROM spotify_connection');
+  }
+}
+
+interface AlexaCommandRow {
+  id: string;
+  name: string;
+  text: string;
+  device_id: string;
+  created_at: string;
+  updated_at: string;
+}
+const toAlexaCommand = (row: AlexaCommandRow): AlexaCommand => ({
+  id: row.id,
+  name: row.name,
+  text: row.text,
+  deviceId: row.device_id,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export class SqliteAlexaCommandRepository implements AlexaCommandRepository {
+  constructor(private readonly db: Database) {}
+
+  list(): AlexaCommand[] {
+    const rows = this.db
+      .prepare('SELECT * FROM alexa_commands ORDER BY created_at, id')
+      .all() as unknown as AlexaCommandRow[];
+    return rows.map(toAlexaCommand);
+  }
+
+  get(id: string): AlexaCommand | undefined {
+    const row = this.db.prepare('SELECT * FROM alexa_commands WHERE id = ?').get(id) as
+      AlexaCommandRow | undefined;
+    return row && toAlexaCommand(row);
+  }
+
+  create(input: AlexaCommandInput): AlexaCommand {
+    const id = `ac_${randomBytes(6).toString('hex')}`;
+    const timestamp = now();
+    this.db
+      .prepare(
+        `INSERT INTO alexa_commands (id, name, text, device_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, input.name, input.text, input.deviceId, timestamp, timestamp);
+    return this.get(id)!;
+  }
+
+  update(id: string, change: Partial<AlexaCommandInput>): AlexaCommand | undefined {
+    const current = this.get(id);
+    if (!current) return undefined;
+    this.db
+      .prepare(
+        'UPDATE alexa_commands SET name = ?, text = ?, device_id = ?, updated_at = ? WHERE id = ?',
+      )
+      .run(
+        change.name ?? current.name,
+        change.text ?? current.text,
+        change.deviceId ?? current.deviceId,
+        now(),
+        id,
+      );
+    return this.get(id);
+  }
+
+  delete(id: string): boolean {
+    return Number(this.db.prepare('DELETE FROM alexa_commands WHERE id = ?').run(id).changes) > 0;
+  }
+
+  count(): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM alexa_commands').get() as { n: number };
+    return Number(row.n);
   }
 }

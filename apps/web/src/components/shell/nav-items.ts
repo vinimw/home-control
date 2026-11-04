@@ -21,6 +21,7 @@ export const PARENT_ROUTES: Readonly<
   Record<string, { href: string; label: string; title: string }>
 > = {
   '/design': { href: '/settings', label: 'Ajustes', title: 'Componentes' },
+  '/echo': { href: '/devices', label: 'Dispositivos', title: 'Echo' },
 };
 
 /** Parent of the current path: an exact entry, or a device page (`/devices/<id>`) under Devices. */
