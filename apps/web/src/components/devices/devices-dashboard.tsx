@@ -9,14 +9,21 @@ import type {
   Device,
   DeviceListResponse,
   DeviceLayout,
+  Room,
 } from '@home-control/shared';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { listCustomDevices, updateCustomDevice } from '@/lib/custom-devices-client';
+import {
+  createRoom,
+  listRooms,
+  listCustomDevices,
+  updateCustomDevice,
+} from '@/lib/custom-devices-client';
 import { executeDeviceCommand, updateDeviceSettings } from '@/lib/devices-client';
 import { cn } from '@/lib/utils';
 import { CATEGORIES, categoryOf, NO_ROOM_LABEL, type CategoryId } from './categories';
@@ -69,15 +76,32 @@ export function DevicesDashboard({
   initial,
   initialCustom = null,
   initialLayout = null,
+  initialRooms = null,
 }: {
   initial: DeviceListResponse | null;
   initialCustom?: CustomDeviceListResponse | null;
   initialLayout?: DeviceLayout | null;
+  initialRooms?: Room[] | null;
 }) {
   const view = useDevices(initial);
   const ordering = useDeviceLayout(initialLayout);
   const [editing, setEditing] = useState(false);
   const [moveNotice, setMoveNotice] = useState('');
+  const [savedRooms, setSavedRooms] = useState<Room[]>(initialRooms ?? []);
+  const [roomName, setRoomName] = useState('');
+  const [roomError, setRoomError] = useState<string | null>(null);
+  const [creatingRoom, setCreatingRoom] = useState(false);
+  const [dropRoom, setDropRoom] = useState<string | null>(null);
+  useEffect(() => {
+    if (initialRooms === null)
+      void listRooms().then((result) => {
+        if (result.ok) setSavedRooms(result.data.rooms);
+        else
+          setRoomError(
+            'Não foi possível carregar os cômodos. Recarregue a página para tentar novamente.',
+          );
+      });
+  }, [initialRooms]);
   const { devices, summary, loaded, stale, connection, updatedAt, refreshing, refresh, apply } =
     view;
   const [filter, setFilter] = useState<Filter>('all');
@@ -133,19 +157,36 @@ export function DevicesDashboard({
     [apply],
   );
 
-  const rooms = useMemo(() => {
-    const byId = new Map<string, string>();
-    for (const device of devices) if (device.room) byId.set(device.room.id, device.room.name);
-    for (const card of customDevices) if (card.room) byId.set(card.room.id, card.room.name);
-    return [...byId.entries()].sort(([, a], [, b]) => a.localeCompare(b, 'pt-BR'));
-  }, [devices, customDevices]);
+  const roomDestinations = useMemo(() => {
+    const byName = new Map<string, { id: string; name: string }>();
+    const add = (room: { id: string; name: string }) =>
+      byName.set(room.name.trim().toLocaleLowerCase('pt-BR'), room);
+    for (const device of devices) if (device.room) add(device.room);
+    for (const card of customDevices) if (card.room) add(card.room);
+    for (const room of savedRooms) add(room);
+    return new Map([...byName.values()].map((room) => [room.name, room.id]));
+  }, [devices, customDevices, savedRooms]);
+  // Sections and filters use the display group, including local overrides of an HA area.
+  const rooms = [...roomDestinations.keys()]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    .map((name) => [name, name] as const);
 
   const entries = useMemo<Entry[]>(
     () => [
       ...devices.map((device): Entry => ({
         kind: 'device',
         name: device.name,
-        room: device.room,
+        room: device.room
+          ? {
+              ...device.room,
+              name:
+                savedRooms.find(
+                  (room) =>
+                    room.name.toLocaleLowerCase('pt-BR') ===
+                    device.room!.name.trim().toLocaleLowerCase('pt-BR'),
+                )?.name ?? device.room.name,
+            }
+          : null,
         device,
       })),
       ...customDevices.map((custom): Entry => ({
@@ -155,7 +196,7 @@ export function DevicesDashboard({
         custom,
       })),
     ],
-    [devices, customDevices],
+    [devices, customDevices, savedRooms],
   );
   const categoryOfEntry = (entry: Entry): CategoryId =>
     entry.kind === 'custom' ? CUSTOM_CATEGORY : categoryOf(entry.device);
@@ -178,7 +219,7 @@ export function DevicesDashboard({
               ? isFavorite(entry)
               : categoryOfEntry(entry) === filter,
         )
-        .filter((entry) => roomId === 'all' || entry.room?.id === roomId),
+        .filter((entry) => roomId === 'all' || entry.room?.name === roomId),
     [entries, filter, roomId],
   );
   const entryId = (entry: Entry) => (entry.kind === 'custom' ? entry.custom.id : entry.device.id);
@@ -196,7 +237,20 @@ export function DevicesDashboard({
     }
   }
   const ranks = new Map(fullOrder.map((id, index) => [id, index]));
-  const groups = groupByRoom(visible).map((group) => ({
+  const roomGroups = groupByRoom(visible);
+  if (editing) {
+    for (const [name] of rooms)
+      if (!roomGroups.some((group) => group.room === name))
+        roomGroups.push({ room: name, items: [] });
+    roomGroups.sort((a, b) =>
+      a.room === NO_ROOM_LABEL
+        ? 1
+        : b.room === NO_ROOM_LABEL
+          ? -1
+          : a.room.localeCompare(b.room, 'pt-BR'),
+    );
+  }
+  const groups = roomGroups.map((group) => ({
     ...group,
     items: group.items.sort(
       (a, b) => (ranks.get(entryId(a)) ?? Infinity) - (ranks.get(entryId(b)) ?? Infinity),
@@ -213,6 +267,36 @@ export function DevicesDashboard({
   // A filter whose devices disappeared (e.g. a category emptied by a live update) falls back to all.
   const activeFilter = filters.some((f) => f.id === filter) ? filter : 'all';
   const activeRoom = roomId === 'all' || rooms.some(([id]) => id === roomId) ? roomId : 'all';
+
+  const movingDisabled = ordering.status !== 'ready' || creatingRoom;
+  const moveToRoom = (source: string, destination: string, target?: string) => {
+    if (movingDisabled) return;
+    const targetRoomId = roomDestinations.get(destination);
+    const entry = entries.find((item) => entryId(item) === source);
+    if (!targetRoomId || !entry || entry.room?.name === destination) return;
+    const next = fullOrder.filter((id) => id !== source);
+    // Dropping on a card inserts before it. Dropping on the section appends after its last card,
+    // including cards hidden by category/favorite filters.
+    const destinationIds = new Set(
+      cardEntries.filter((item) => item.room?.name === destination).map(entryId),
+    );
+    const targetIndex = target ? next.indexOf(target) : -1;
+    let position = targetIndex;
+    if (position < 0) {
+      position = next.reduce(
+        (last, id, index) => (destinationIds.has(id) ? index + 1 : last),
+        next.length,
+      );
+    }
+    next.splice(position, 0, source);
+    void ordering.moveRoom(next, source, targetRoomId, (result) => {
+      if (result.device) apply(result.device);
+      if (result.custom) applyCustom(result.custom);
+      setSavedRooms(result.rooms);
+      setRoomId('all');
+      setMoveNotice(`${entry.name} movido para ${destination}.`);
+    });
+  };
 
   const badge = CONNECTION_BADGE[connection];
   const unavailable = summary?.byAvailability.unavailable ?? 0;
@@ -387,7 +471,7 @@ export function DevicesDashboard({
             <Button
               variant={editing ? 'default' : 'outline'}
               aria-pressed={editing}
-              disabled={ordering.status !== 'ready'}
+              disabled={movingDisabled}
               onClick={() => setEditing(!editing)}
             >
               {editing ? 'Concluir organização' : 'Organizar cartões'}
@@ -406,9 +490,9 @@ export function DevicesDashboard({
           </div>
           {editing ? (
             <p className="text-sm text-muted-foreground">
-              Arraste pela alça até outro cartão do mesmo cômodo ou use as setas para mover. Os
-              controles dos cartões ficam desativados durante a organização. Cada movimento é salvo
-              automaticamente.
+              Arraste pela alça até outro cartão ou solte em um cômodo para mudar o grupo. Use as
+              setas para ordenar ou escolha “Mover para cômodo”. Os controles dos cartões ficam
+              desativados durante a organização. Cada movimento é salvo automaticamente.
             </p>
           ) : null}
           {ordering.status === 'error' ? (
@@ -420,21 +504,66 @@ export function DevicesDashboard({
                   A ordem exibida pode não estar salva ou ter sido alterada em outra aba. Recarregue
                   a ordem salva antes de continuar organizando.
                 </AlertDescription>
-                <Button
-                  variant="outline"
-                  className="mt-2"
-                  onClick={() => {
-                    setMoveNotice('');
-                    void ordering.reload();
-                  }}
-                >
+                <Button variant="outline" className="mt-2" onClick={() => window.location.reload()}>
                   Recarregar ordem salva
                 </Button>
               </div>
             </Alert>
           ) : null}
 
-          {visible.length === 0 ? (
+          {editing ? (
+            <form
+              className="flex flex-wrap items-end gap-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (movingDisabled || !roomName.trim()) return;
+                setCreatingRoom(true);
+                setRoomError(null);
+                try {
+                  const result = await createRoom(roomName.trim());
+                  if (result.ok) {
+                    setSavedRooms((current) => [...current, result.data]);
+                    setRoomName('');
+                    setMoveNotice(`Cômodo ${result.data.name} criado. Arraste um cartão para ele.`);
+                  } else
+                    setRoomError(
+                      result.code === 'conflict'
+                        ? 'Já existe um cômodo com esse nome.'
+                        : 'Não foi possível criar o cômodo. Confira a conexão e tente novamente.',
+                    );
+                } finally {
+                  setCreatingRoom(false);
+                }
+              }}
+            >
+              <label
+                htmlFor="new-dashboard-room"
+                className="flex min-w-0 flex-1 flex-col gap-1 text-sm"
+              >
+                Novo cômodo
+                <Input
+                  id="new-dashboard-room"
+                  value={roomName}
+                  onChange={(event) => setRoomName(event.target.value)}
+                  maxLength={40}
+                  required
+                  placeholder="Ex.: Sala de estar"
+                  disabled={movingDisabled}
+                />
+              </label>
+              <Button type="submit" variant="outline" disabled={movingDisabled || !roomName.trim()}>
+                {creatingRoom ? 'Criando…' : 'Criar cômodo'}
+              </Button>
+            </form>
+          ) : null}
+          {roomError ? (
+            <Alert variant="danger">
+              <CircleAlert aria-hidden />
+              <AlertDescription>{roomError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {visible.length === 0 && !editing ? (
             <EmptyState
               icon={SearchX}
               title="Nenhum dispositivo com esses filtros"
@@ -459,14 +588,27 @@ export function DevicesDashboard({
                 entry.kind === 'device' && !isControllable(entry.device) ? [entry.device] : [],
               );
               return (
-                <section key={group.room} aria-label={group.room} className="flex flex-col gap-2">
+                <section
+                  key={group.room}
+                  aria-label={group.room}
+                  data-order-room={editing && group.room !== NO_ROOM_LABEL ? group.room : undefined}
+                  className={cn(
+                    'flex min-w-0 flex-col gap-2 rounded-lg',
+                    editing && 'border border-dashed border-input p-2',
+                    dropRoom === group.room && 'ring-2 ring-primary',
+                  )}
+                >
                   <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     {group.room}
                   </h2>
                   {cards.length > 0 ? (
                     <OrderingGrid
                       editing={editing}
-                      disabled={ordering.status !== 'ready'}
+                      disabled={movingDisabled}
+                      room={group.room}
+                      rooms={rooms.map(([name]) => name)}
+                      onRoomDrop={moveToRoom}
+                      onDragTarget={setDropRoom}
                       items={cards.map((entry) => ({
                         id: entryId(entry),
                         name: entry.name,
@@ -495,6 +637,11 @@ export function DevicesDashboard({
                         void ordering.save(updated);
                       }}
                     />
+                  ) : null}
+                  {editing && cards.length === 0 ? (
+                    <p className="flex min-h-24 items-center justify-center rounded-md bg-muted/40 p-3 text-center text-sm text-muted-foreground">
+                      Solte um cartão aqui para movê-lo para {group.room}.
+                    </p>
                   ) : null}
                   {readOnly.length > 0 ? (
                     <Card>

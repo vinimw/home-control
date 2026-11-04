@@ -14,11 +14,19 @@ export function OrderingGrid({
   editing,
   disabled,
   onMove,
+  room,
+  rooms,
+  onRoomDrop,
+  onDragTarget,
 }: {
   items: Item[];
   editing: boolean;
   disabled: boolean;
   onMove: (source: string, target: string) => void;
+  room: string;
+  rooms: string[];
+  onRoomDrop: (source: string, room: string, target?: string) => void;
+  onDragTarget: (room: string | null) => void;
 }) {
   const grid = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -27,14 +35,17 @@ export function OrderingGrid({
   function cancel() {
     drag.current = null;
     setPreview(null);
+    onDragTarget(null);
   }
 
-  function locate(x: number, y: number): string | null {
-    const element = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-order-card]');
-    // Reject targets from any other room, even when it is immediately beside/below this grid.
-    return element && element.parentElement === grid.current
-      ? (element.dataset.orderCard ?? null)
-      : null;
+  function locate(x: number, y: number) {
+    const element = document.elementFromPoint(x, y);
+    const card = element?.closest<HTMLElement>('[data-order-card]');
+    const destination = element?.closest<HTMLElement>('[data-order-room]');
+    return {
+      room: destination?.dataset.orderRoom ?? (card?.parentElement === grid.current ? room : null),
+      card: card?.dataset.orderCard ?? null,
+    };
   }
 
   function start(event: PointerEvent<HTMLButtonElement>, source: string) {
@@ -57,7 +68,9 @@ export function OrderingGrid({
     if (!current || current.pointerId !== event.pointerId) return;
     current.x = event.clientX;
     current.y = event.clientY;
-    current.target = locate(current.x, current.y);
+    const target = locate(current.x, current.y);
+    current.target = target.card;
+    onDragTarget(target.room);
     setPreview({ source: current.source, target: current.target });
   }
 
@@ -66,7 +79,9 @@ export function OrderingGrid({
     if (!current || current.pointerId !== event.pointerId) return;
     const target = locate(event.clientX, event.clientY);
     cancel();
-    if (!disabled && target && target !== current.source) onMove(current.source, target);
+    if (disabled || !target.room) return;
+    if (target.room !== room) onRoomDrop(current.source, target.room, target.card ?? undefined);
+    else if (target.card && target.card !== current.source) onMove(current.source, target.card);
   }
 
   const dragging = preview !== null;
@@ -77,6 +92,7 @@ export function OrderingGrid({
         event.preventDefault();
         drag.current = null;
         setPreview(null);
+        onDragTarget(null);
       }
     };
     // Scroll near viewport edges so long room groups remain reorderable on a phone.
@@ -96,7 +112,7 @@ export function OrderingGrid({
       cancelAnimationFrame(frame);
       window.removeEventListener('keydown', onKey);
     };
-  }, [dragging]);
+  }, [dragging, onDragTarget]);
 
   return (
     <div ref={grid} className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -122,7 +138,7 @@ export function OrderingGrid({
                 size="icon"
                 disabled={disabled}
                 aria-label={`Arrastar ${item.name}`}
-                title="Arraste para outro cartão deste cômodo. Esc cancela."
+                title="Arraste para outro cartão ou cômodo. Esc cancela."
                 className="touch-none cursor-grab active:cursor-grabbing"
                 onPointerDown={(event) => start(event, item.id)}
                 onPointerMove={move}
@@ -154,6 +170,27 @@ export function OrderingGrid({
               >
                 <ArrowDown aria-hidden />
               </Button>
+              <label className="flex w-full min-w-0 flex-col gap-1 text-xs text-muted-foreground">
+                Mover para cômodo
+                <select
+                  aria-label={`Mover ${item.name} para cômodo`}
+                  value=""
+                  disabled={disabled}
+                  className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  onChange={(event) => {
+                    if (event.target.value) onRoomDrop(item.id, event.target.value);
+                  }}
+                >
+                  <option value="">Escolher cômodo…</option>
+                  {rooms
+                    .filter((name) => name !== room)
+                    .map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                </select>
+              </label>
             </div>
           ) : null}
           {/* Card controls/links cannot receive pointer or keyboard events while organizing. */}

@@ -108,3 +108,11 @@ safe integer revision, at most 500 unique ids matching the stable id formats. A 
 when the supplied revision matches, increments it and returns the new snapshot. A mismatch returns `409
 conflict`, requiring a fresh read before retrying; concurrent requests never silently overwrite one another.
 The ordering endpoint never invokes a device command.
+
+`POST /device-layout/move` accepts `{ revision, cardIds, cardId, roomId }` and returns
+`{ layout, device, custom, rooms }`. The destination must be a saved room or a currently discovered area;
+unknown/deleted destinations and cards are rejected. For discovered areas, the transaction creates/reuses
+local rooms by case-insensitive name and stores only the moved card's override. The same transaction
+updates the layout revision, so a stale request or metadata failure changes neither membership nor order.
+Both Home Assistant and custom Alexa cards use their existing metadata repositories; no schema migration
+or provider write is needed. The standard authenticated gate and CSRF checks cover this endpoint.
