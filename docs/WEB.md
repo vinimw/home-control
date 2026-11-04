@@ -157,6 +157,13 @@ Playback/volume from the Echo's own commands, a saved-command dropdown with an e
 button, and a command manager with **Testar comando** before **Salvar comando** (see [ALEXA.md](ALEXA.md)).
 Alexa results use their own status line with no "confirmado": acceptance never proves what Alexa did.
 
+## Custom cards (`/devices/custom`)
+
+The Devices dashboard also lists the user's custom cards (lights controlled through Alexa) under **Luzes e
+tomadas**, with explicit **Ligar** / **Desligar** buttons (no switch: the state is unknown), the last request
+with its time, and the reason when a button is disabled. Both buttons are disabled while one request is
+pending. `/devices/custom` creates, edits and deletes cards (new room allowed); saving never sends anything.
+
 ## Adding a component
 
 1. Put primitives in `components/ui` using `cva` + `cn`; keep 44 px touch targets on interactive elements.

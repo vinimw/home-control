@@ -1,5 +1,9 @@
 import {
   API_ALEXA_COMMANDS_PATH,
+  API_CUSTOM_DEVICES_PATH,
+  API_ROOMS_PATH,
+  type CustomDeviceListResponse,
+  type RoomListResponse,
   API_HA_STATUS_PATH,
   type AlexaCommandListResponse,
   API_DEVICES_PATH,
@@ -39,6 +43,16 @@ export function getDevices(): Promise<DeviceListResponse | null> {
 /** Server-side only: the saved Alexa commands, or `null` when the API cannot be reached. */
 export function getAlexaCommands(): Promise<AlexaCommandListResponse | null> {
   return getJson<AlexaCommandListResponse>(API_ALEXA_COMMANDS_PATH);
+}
+
+/** Server-side only: the custom device cards, or `null` when the API cannot be reached. */
+export function getCustomDevices(): Promise<CustomDeviceListResponse | null> {
+  return getJson<CustomDeviceListResponse>(API_CUSTOM_DEVICES_PATH);
+}
+
+/** Server-side only: the rooms, or `null` when the API cannot be reached. */
+export function getRooms(): Promise<RoomListResponse | null> {
+  return getJson<RoomListResponse>(API_ROOMS_PATH);
 }
 
 export interface SystemStatus {

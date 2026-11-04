@@ -1,17 +1,25 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
-import { CircleAlert, LayoutGrid, RefreshCw, SearchX, WifiOff } from 'lucide-react';
-import type { Device, DeviceListResponse } from '@home-control/shared';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { CircleAlert, LayoutGrid, Lightbulb, RefreshCw, SearchX, WifiOff } from 'lucide-react';
+import type {
+  CustomDevice,
+  CustomDeviceListResponse,
+  Device,
+  DeviceListResponse,
+} from '@home-control/shared';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { listCustomDevices, updateCustomDevice } from '@/lib/custom-devices-client';
 import { executeDeviceCommand, updateDeviceSettings } from '@/lib/devices-client';
 import { cn } from '@/lib/utils';
 import { CATEGORIES, categoryOf, NO_ROOM_LABEL, type CategoryId } from './categories';
+import { CustomDeviceTile } from './custom-device-tile';
 import { DeviceRow } from './device-row';
 import { DeviceTile, isControllable } from './device-tile';
 import { useDevices, type Connection } from './use-devices';
@@ -29,11 +37,13 @@ type Filter = 'all' | 'favorites' | CategoryId;
 
 const timeFormat = new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium' });
 
-function groupByRoom(devices: Device[]): Array<{ room: string; devices: Device[] }> {
-  const groups = new Map<string, Device[]>();
-  for (const device of devices) {
-    const key = device.room?.name ?? NO_ROOM_LABEL;
-    groups.set(key, [...(groups.get(key) ?? []), device]);
+function groupByRoom<T extends { name: string; room: { name: string } | null }>(
+  items: T[],
+): Array<{ room: string; items: T[] }> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = item.room?.name ?? NO_ROOM_LABEL;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
   }
   return [...groups.entries()]
     .sort(([a], [b]) =>
@@ -41,17 +51,59 @@ function groupByRoom(devices: Device[]): Array<{ room: string; devices: Device[]
     )
     .map(([room, list]) => ({
       room,
-      devices: list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+      items: list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     }));
 }
 
-export function DevicesDashboard({ initial }: { initial: DeviceListResponse | null }) {
+/** A card configured by the user (a light controlled through Alexa) always belongs to this category. */
+const CUSTOM_CATEGORY: CategoryId = 'lights';
+
+type Entry =
+  | { kind: 'device'; name: string; room: Device['room']; device: Device }
+  | { kind: 'custom'; name: string; room: CustomDevice['room']; custom: CustomDevice };
+
+export function DevicesDashboard({
+  initial,
+  initialCustom = null,
+}: {
+  initial: DeviceListResponse | null;
+  initialCustom?: CustomDeviceListResponse | null;
+}) {
   const view = useDevices(initial);
   const { devices, summary, loaded, stale, connection, updatedAt, refreshing, refresh, apply } =
     view;
   const [filter, setFilter] = useState<Filter>('all');
   const [roomId, setRoomId] = useState<string>('all');
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
+
+  // Custom cards are not part of the live Home Assistant stream: they are re-read on demand, when the
+  // page becomes visible again, and after every request that touches them.
+  const [customDevices, setCustomDevices] = useState<CustomDevice[]>(initialCustom?.devices ?? []);
+  const reloadCustom = useCallback(async () => {
+    const result = await listCustomDevices();
+    if (result.ok) setCustomDevices(result.data.devices);
+  }, []);
+  useEffect(() => {
+    if (initialCustom === null) void reloadCustom();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reloadCustom();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // Runs once: `initialCustom` is only the starting value.
+  }, []);
+  const applyCustom = useCallback((card: CustomDevice) => {
+    setCustomDevices((current) => current.map((item) => (item.id === card.id ? card : item)));
+  }, []);
+  const onToggleCustomFavorite = useCallback(
+    async (card: CustomDevice) => {
+      setFavoriteError(null);
+      const result = await updateCustomDevice(card.id, { favorite: !card.favorite });
+      if (result.ok) applyCustom(result.data);
+      else setFavoriteError(`Não foi possível alterar o favorito de ${card.name}.`);
+    },
+    [applyCustom],
+  );
 
   // Commands go through the API; a returned device is the server's real view, so it is applied at once.
   const onCommand = useCallback(
@@ -76,27 +128,50 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
   const rooms = useMemo(() => {
     const byId = new Map<string, string>();
     for (const device of devices) if (device.room) byId.set(device.room.id, device.room.name);
+    for (const card of customDevices) if (card.room) byId.set(card.room.id, card.room.name);
     return [...byId.entries()].sort(([, a], [, b]) => a.localeCompare(b, 'pt-BR'));
-  }, [devices]);
+  }, [devices, customDevices]);
+
+  const entries = useMemo<Entry[]>(
+    () => [
+      ...devices.map((device): Entry => ({
+        kind: 'device',
+        name: device.name,
+        room: device.room,
+        device,
+      })),
+      ...customDevices.map((custom): Entry => ({
+        kind: 'custom',
+        name: custom.name,
+        room: custom.room,
+        custom,
+      })),
+    ],
+    [devices, customDevices],
+  );
+  const categoryOfEntry = (entry: Entry): CategoryId =>
+    entry.kind === 'custom' ? CUSTOM_CATEGORY : categoryOf(entry.device);
+  const isFavorite = (entry: Entry) =>
+    entry.kind === 'custom' ? entry.custom.favorite : entry.device.favorite;
 
   const presentCategories = useMemo(
-    () => CATEGORIES.filter((c) => devices.some((device) => categoryOf(device) === c.id)),
-    [devices],
+    () => CATEGORIES.filter((c) => entries.some((entry) => categoryOfEntry(entry) === c.id)),
+    [entries],
   );
-  const favoriteCount = devices.filter((device) => device.favorite).length;
+  const favoriteCount = entries.filter(isFavorite).length;
 
   const visible = useMemo(
     () =>
-      devices
-        .filter((device) =>
+      entries
+        .filter((entry) =>
           filter === 'all'
             ? true
             : filter === 'favorites'
-              ? device.favorite
-              : categoryOf(device) === filter,
+              ? isFavorite(entry)
+              : categoryOfEntry(entry) === filter,
         )
-        .filter((device) => roomId === 'all' || device.room?.id === roomId),
-    [devices, filter, roomId],
+        .filter((entry) => roomId === 'all' || entry.room?.id === roomId),
+    [entries, filter, roomId],
   );
   const groups = useMemo(() => groupByRoom(visible), [visible]);
 
@@ -121,9 +196,9 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
           <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Dispositivos</h1>
           <p className="text-xs text-muted-foreground md:text-sm">
             {loaded && summary
-              ? `${summary.total} ${summary.total === 1 ? 'dispositivo' : 'dispositivos'}${
-                  unavailable > 0 ? ` · ${unavailable} indisponível(is)` : ''
-                }`
+              ? `${summary.total + customDevices.length} ${
+                  summary.total + customDevices.length === 1 ? 'dispositivo' : 'dispositivos'
+                }${unavailable > 0 ? ` · ${unavailable} indisponível(is)` : ''}`
               : 'Carregando…'}
           </p>
         </div>
@@ -136,7 +211,10 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
             size="icon"
             aria-label="Atualizar"
             title="Atualizar"
-            onClick={() => void refresh()}
+            onClick={() => {
+              void refresh();
+              void reloadCustom();
+            }}
             disabled={refreshing}
           >
             <RefreshCw
@@ -173,6 +251,20 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
         </Alert>
       ) : null}
 
+      {loaded && summary && !summary.ready && customDevices.length > 0 ? (
+        <Alert variant="warning">
+          <WifiOff aria-hidden />
+          <div>
+            <AlertTitle>Home Assistant ainda não está conectado</AlertTitle>
+            <AlertDescription>
+              {summary.lastError
+                ? `Última falha: ${summary.lastError.message}`
+                : 'Os cartões abaixo podem não funcionar até a primeira sincronização.'}
+            </AlertDescription>
+          </div>
+        </Alert>
+      ) : null}
+
       {favoriteError ? (
         <Alert variant="danger">
           <CircleAlert aria-hidden />
@@ -202,7 +294,7 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
             ))}
           </div>
         )
-      ) : summary && !summary.ready ? (
+      ) : summary && !summary.ready && customDevices.length === 0 ? (
         <EmptyState
           icon={WifiOff}
           title="Home Assistant ainda não está conectado"
@@ -212,12 +304,17 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
               : 'Configure o Home Assistant e aguarde a primeira sincronização.'
           }
         />
-      ) : devices.length === 0 ? (
+      ) : entries.length === 0 ? (
         <EmptyState
           icon={LayoutGrid}
           title="Nenhum dispositivo encontrado"
           description="O Home Assistant está conectado, mas não expõe nenhum dispositivo compatível."
-        />
+        >
+          <Link href="/devices/custom" className={buttonVariants({ variant: 'outline' })}>
+            <Lightbulb aria-hidden />
+            Criar cartão personalizado
+          </Link>
+        </EmptyState>
       ) : (
         <>
           {/* Sticky under the app bar: the filters stay in reach however far the list scrolls. */}
@@ -276,14 +373,20 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
             </EmptyState>
           ) : (
             groups.map((group) => {
-              const controllable = group.devices.filter(isControllable);
-              const readOnly = group.devices.filter((device) => !isControllable(device));
+              const customs = group.items.flatMap((entry) =>
+                entry.kind === 'custom' ? [entry.custom] : [],
+              );
+              const real = group.items.flatMap((entry) =>
+                entry.kind === 'device' ? [entry.device] : [],
+              );
+              const controllable = real.filter(isControllable);
+              const readOnly = real.filter((device) => !isControllable(device));
               return (
                 <section key={group.room} aria-label={group.room} className="flex flex-col gap-2">
                   <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     {group.room}
                   </h2>
-                  {controllable.length > 0 ? (
+                  {controllable.length + customs.length > 0 ? (
                     <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {controllable.map((device) => (
                         <DeviceTile
@@ -291,6 +394,14 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
                           device={device}
                           onCommand={onCommand}
                           onToggleFavorite={onToggleFavorite}
+                        />
+                      ))}
+                      {customs.map((card) => (
+                        <CustomDeviceTile
+                          key={card.id}
+                          device={card}
+                          onChange={applyCustom}
+                          onToggleFavorite={onToggleCustomFavorite}
                         />
                       ))}
                     </div>
@@ -312,6 +423,13 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
               );
             })
           )}
+          <Link
+            href="/devices/custom"
+            className={cn(buttonVariants({ variant: 'outline' }), 'self-start')}
+          >
+            <Lightbulb aria-hidden />
+            Cartões personalizados
+          </Link>
         </>
       )}
     </div>

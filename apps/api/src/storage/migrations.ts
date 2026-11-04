@@ -110,6 +110,30 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    id: 5,
+    name: 'custom_devices',
+    sql: `
+      -- Cards the USER configured for things that are controlled indirectly (through saved Alexa commands).
+      -- on/off_command_id deliberately have no foreign key: deleting a saved command must not delete or
+      -- block the card (it shows the mapping as missing). Nothing here is executed by storing it.
+      CREATE TABLE custom_devices (
+        id               TEXT PRIMARY KEY,
+        name             TEXT NOT NULL,
+        room_id          TEXT REFERENCES rooms(id) ON DELETE SET NULL,
+        favorite         INTEGER NOT NULL DEFAULT 0,
+        on_command_id    TEXT,
+        off_command_id   TEXT,
+        last_action      TEXT,
+        last_status      TEXT,
+        last_error_code  TEXT,
+        last_error_msg   TEXT,
+        last_at          TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');

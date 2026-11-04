@@ -64,6 +64,36 @@ devices with an **Ativar** button on the dashboard. A saved text command does no
 and **Comandos salvos** (form with **Testar comando** before **Salvar comando**, edit, delete). Testing sends
 a real request and creates nothing; changing the text or Echo clears the previous test result.
 
+## Custom device cards (#52)
+
+A **custom card** is a light/outlet on the Devices page that is controlled _indirectly_ through two saved
+commands: one for **Ligar**, one for **Desligar** (for example "Ligar luminária" / "Desligar luminária").
+Nothing is seeded: you create each card in the app (**Dispositivos → Cartões personalizados → Novo cartão**),
+so the household values stay yours.
+
+- Stored in `custom_devices` (migration 5): name, room, favorite and the two command ids. The command ids have
+  no foreign key: deleting a saved command never deletes the card, the matching button is disabled and says why.
+- Saving, editing or selecting a mapping **never sends anything**. Only a click on Ligar/Desligar does.
+- `POST /custom-devices/:id/execute` takes only `{ "action": "on" | "off" }`. The server resolves the mapped
+  saved command and sends its **stored** text through the same service, gate and Echo checks as
+  `POST /alexa/commands/:id/execute`. The text and the target cannot come from the client.
+- A second identical request while one is in flight is refused (`409`), as is a button with no mapping.
+- **State is unknown.** `accepted` only means Home Assistant took the request. The card shows "Estado
+  desconhecido" and the last request with its time and outcome (kept in the database), never "ligada" or
+  "disponível". An unavailable Echo disables the buttons; that says nothing about the lamp itself.
+- Cards appear under **Luzes e tomadas**, in their room, and honor the favorites and room filters.
+
+Setting up the two lights from the issue (about a minute): create the four saved commands on `/echo` if they
+do not exist, then create **LED churrasqueira** and **Luminária** on `/devices/custom`, picking the command
+for each button.
+
+| Physical check (pending)                 | Result |
+| ---------------------------------------- | ------ |
+| LED churrasqueira: Ligar turns it on     | ⬜     |
+| LED churrasqueira: Desligar turns it off | ⬜     |
+| Luminária: Ligar turns it on             | ⬜     |
+| Luminária: Desligar turns it off         | ⬜     |
+
 ## Not verified
 
 Everything above was exercised against a **simulated** Home Assistant. The real effect of a command on the
