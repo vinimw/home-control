@@ -6,6 +6,7 @@ import {
   type DeviceActionResult,
   type DeviceListResponse,
 } from '@home-control/shared';
+import { csrfHeaders, redirectToLogin } from './csrf';
 
 /**
  * Browser-side calls. They go to this app's own `/api/*` relay (same origin), never to the API directly.
@@ -17,8 +18,18 @@ export const DEVICE_EVENTS_URL = `${BASE}/events`;
 
 export async function fetchDevices(signal?: AbortSignal): Promise<DeviceListResponse> {
   const response = await fetch(BASE, { cache: 'no-store', signal });
+  if (response.status === 401) redirectToLogin();
   if (!response.ok) throw new Error(`devices request failed (${response.status})`);
   return (await response.json()) as DeviceListResponse;
+}
+
+/**
+ * Unique id for idempotency. `crypto.randomUUID` only exists on HTTPS or localhost, and this app is
+ * normally opened over plain http on the LAN (http://192.168.x.x), so it is built from random bytes.
+ */
+function newRequestId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function isActionResult(value: unknown): value is DeviceActionResult {
@@ -57,17 +68,18 @@ export async function executeDeviceCommand(
   try {
     response = await fetch(`${BASE}/${deviceId}/actions`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify({
         command,
         ...(params ? { params } : {}),
-        requestId: crypto.randomUUID(),
+        requestId: newRequestId(),
       }),
     });
   } catch {
     return failed();
   }
 
+  if (response.status === 401) redirectToLogin();
   const body: unknown = await response.json().catch(() => null);
   if (response.ok && isActionResult(body)) return body;
   if (isActionResult(body)) return { ...body, status: 'failed' };
@@ -82,9 +94,10 @@ export async function updateDeviceSettings(
   try {
     const response = await fetch(`${BASE}/${deviceId}/settings`, {
       method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...csrfHeaders() },
       body: JSON.stringify(change),
     });
+    if (response.status === 401) redirectToLogin();
     return response.ok ? ((await response.json()) as Device) : null;
   } catch {
     return null;

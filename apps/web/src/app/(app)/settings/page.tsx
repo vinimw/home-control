@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ChangePasswordForm } from '@/components/auth/change-password-form';
 import { ThemeSelector } from '@/components/shell/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +19,18 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ThemeSelector />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Segurança</CardTitle>
+          <CardDescription>
+            Altere a senha. Os outros aparelhos conectados serão desconectados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm />
         </CardContent>
       </Card>
 

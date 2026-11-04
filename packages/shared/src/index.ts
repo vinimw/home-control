@@ -1,4 +1,5 @@
 export * from './actions.js';
+export * from './auth.js';
 export * from './devices.js';
 export * from './errors.js';
 export * from './events.js';

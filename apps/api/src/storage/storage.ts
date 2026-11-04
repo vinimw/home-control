@@ -2,11 +2,13 @@ import { IN_MEMORY, openDatabase, type Database } from './database.js';
 import { StorageError } from './errors.js';
 import { runMigrations, type MigrationResult } from './migrations.js';
 import type {
+  AuthRepository,
   DeviceSettingsRepository,
   RoomRepository,
   SettingsRepository,
 } from './repositories.js';
 import {
+  SqliteAuthRepository,
   SqliteDeviceSettingsRepository,
   SqliteRoomRepository,
   SqliteSettingsRepository,
@@ -24,6 +26,7 @@ export class Storage {
   readonly rooms: RoomRepository;
   readonly deviceSettings: DeviceSettingsRepository;
   readonly settings: SettingsRepository;
+  readonly auth: AuthRepository;
 
   private constructor(
     private readonly db: Database,
@@ -32,6 +35,7 @@ export class Storage {
     this.rooms = new SqliteRoomRepository(db);
     this.deviceSettings = new SqliteDeviceSettingsRepository(db);
     this.settings = new SqliteSettingsRepository(db);
+    this.auth = new SqliteAuthRepository(db);
   }
 
   /** Opens the database file and brings the schema up to date. Throws {@link StorageError}. */

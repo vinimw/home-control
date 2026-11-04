@@ -14,6 +14,17 @@ shadcn-style primitives (class-variance-authority + tailwind-merge + Radix) writ
 - Routes: `/` (system status), `/devices` (live dashboard), `/scenes`, `/settings`, `/design` (component library).
   Areas that are not built yet show an honest empty state, never fake data.
 
+## Login
+
+Every screen needs a session. The routes live in two groups: `app/(app)` (checks the session on the server
+for each request, then renders the shell) and `app/(auth)/login` (no shell). An anonymous visitor is sent to
+`/login`; the first visit asks for the one-time setup code from the API log and a new password. If the API
+cannot be reached the session cannot be verified, so a "Servidor indisponível" page is shown instead of the
+app. The session cookie is HttpOnly (the page never reads it); the CSRF token is handed to the page by the
+server, kept in memory only and sent on every write. A `401` anywhere (for example after logging out on
+another device) sends the browser back to `/login`. **Sair** is in the header; **Ajustes > Segurança**
+changes the password. Details and limits: [SECURITY.md](SECURITY.md).
+
 ## Theming
 
 Light and dark via CSS variables (`globals.css`) and `next-themes` (class strategy, follows the system by

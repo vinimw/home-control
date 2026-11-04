@@ -15,6 +15,14 @@ export type ApiErrorCode =
   | 'actions_disabled'
   | 'conflict'
   | 'too_many_requests'
+  /** No valid session. */
+  | 'auth_required'
+  /** Wrong password or setup code. Deliberately says nothing more. */
+  | 'invalid_credentials'
+  /** A state-changing request without a valid CSRF token or from another origin. */
+  | 'csrf_invalid'
+  /** Login attempted before the first-run setup. */
+  | 'setup_required'
   | 'internal_error';
 
 export interface ApiErrorPayload {

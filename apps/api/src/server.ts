@@ -1,11 +1,14 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { API_HEALTH_PATH, type ApiErrorBody, type HealthResponse } from '@home-control/shared';
+import { registerAuthGate } from './auth/plugin.js';
+import { AuthService } from './auth/service.js';
 import { ApiError, HTTP_STATUS_BY_CODE } from './errors.js';
 import { DeviceActionService } from './devices/actions/service.js';
 import { DeviceCatalog } from './devices/catalog.js';
 import { DeviceEventHub } from './devices/events.js';
 import { DeviceRegistry } from './devices/registry.js';
 import { HomeAssistantService, type HomeAssistantSettings } from './homeassistant/service.js';
+import { registerAuthRoutes } from './routes/auth.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerRoomRoutes } from './routes/rooms.js';
 import { registerSettingsRoutes } from './routes/settings.js';
@@ -16,6 +19,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     homeAssistant: HomeAssistantService;
     storage: Storage;
+    auth: AuthService;
     devices: DeviceRegistry;
     catalog: DeviceCatalog;
     deviceEvents: DeviceEventHub;
@@ -29,8 +33,18 @@ export interface ServerOptions {
   logLevel?: string;
   homeAssistant?: HomeAssistantSettings | null;
   deviceRefreshIntervalMs?: number;
-  /** Device actions stay disabled unless explicitly enabled (no authentication yet). */
+  /** Device actions can be switched off independently of authentication. */
   deviceActions?: { enabled: boolean; confirmTimeoutMs?: number };
+  /**
+   * Authentication. Off by default so `buildServer()` stays usable in isolation; the real entry point
+   * (`index.ts`) turns it on.
+   */
+  auth?: {
+    enabled: boolean;
+    cookieSecure?: 'auto' | boolean;
+    idleTtlMs?: number;
+    absoluteTtlMs?: number;
+  };
 }
 
 export function buildServer(options: ServerOptions = {}): FastifyInstance {
@@ -54,6 +68,15 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   app.decorate('homeAssistant', new HomeAssistantService(options.homeAssistant ?? null, app.log));
   app.decorate('storage', options.storage ?? Storage.openInMemory());
   app.decorate(
+    'auth',
+    new AuthService(app.storage.auth, {
+      enabled: options.auth?.enabled ?? false,
+      logger: app.log,
+      idleTtlMs: options.auth?.idleTtlMs,
+      absoluteTtlMs: options.auth?.absoluteTtlMs,
+    }),
+  );
+  app.decorate(
     'devices',
     new DeviceRegistry({
       service: app.homeAssistant,
@@ -76,7 +99,11 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       confirmTimeoutMs: options.deviceActions?.confirmTimeoutMs,
     }),
   );
+  registerAuthGate(app);
+  const purgeTimer = setInterval(() => app.auth.purgeExpired(), 60 * 60 * 1000);
+  purgeTimer.unref();
   app.addHook('onClose', async () => {
+    clearInterval(purgeTimer);
     app.devices.stop();
     app.homeAssistant.stop();
     app.storage.close();
@@ -114,6 +141,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     timestamp: new Date().toISOString(),
   }));
 
+  registerAuthRoutes(app, { secure: options.auth?.cookieSecure ?? 'auto' });
   registerHomeAssistantRoutes(app);
   registerDeviceRoutes(app);
   registerRoomRoutes(app);

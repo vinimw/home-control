@@ -27,7 +27,12 @@ const USAGE = `Usage: pnpm device:probe [options]
   --out <file>     Also write the report to this file
   --help           Show this help
 
-Without --execute nothing is sent to the device.`;
+Without --execute nothing is sent to the device.
+
+The API requires a login. Put the password in the HOME_CONTROL_PASSWORD environment variable (not on the
+command line, where it would stay in your shell history):
+
+  HOME_CONTROL_PASSWORD='...' pnpm device:probe --type tv`;
 
 const { values: opts } = parseArgs({
   options: {
@@ -61,11 +66,52 @@ function redact(text) {
     );
 }
 
-async function request(path, init) {
-  const started = Date.now();
+/** Session obtained by logging in with HOME_CONTROL_PASSWORD (null when none was given). */
+let session = null;
+
+async function login() {
+  const password = process.env.HOME_CONTROL_PASSWORD;
+  if (!password) return;
   let response;
   try {
-    response = await fetch(`${api}${path}`, { ...init, signal: AbortSignal.timeout(20_000) });
+    response = await fetch(`${api}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password }),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    fail(
+      `Could not reach the API at ${api} (${error.cause?.code ?? error.message}). Is it running?`,
+    );
+  }
+  if (!response.ok) {
+    fail(
+      response.status === 429
+        ? 'Too many login attempts: wait a moment and try again.'
+        : 'Login failed: check HOME_CONTROL_PASSWORD.',
+    );
+  }
+  const body = await response.json();
+  const cookie = (response.headers.getSetCookie?.() ?? [])[0]?.split(';')[0];
+  if (!cookie || !body.csrfToken) fail('Login did not return a session.');
+  session = { cookie, csrf: body.csrfToken };
+}
+
+async function request(path, init = {}) {
+  const started = Date.now();
+  let response;
+  const headers = { ...init.headers };
+  if (session) {
+    headers.cookie = session.cookie;
+    if (init.method && init.method !== 'GET') headers['x-csrf-token'] = session.csrf;
+  }
+  try {
+    response = await fetch(`${api}${path}`, {
+      ...init,
+      headers,
+      signal: AbortSignal.timeout(20_000),
+    });
   } catch (error) {
     throw new Error(
       `Could not reach the API at ${api} (${error.cause?.code ?? error.message}). Is it running?`,
@@ -84,9 +130,13 @@ function fail(message) {
 // ---------------------------------------------------------------------------------------------------
 // 1. Find the device
 // ---------------------------------------------------------------------------------------------------
+await login();
 const list = await request(`/devices?type=${encodeURIComponent(opts.type)}`).catch((e) =>
   fail(e.message),
 );
+if (list.http === 401) {
+  fail('The API requires a login. Set HOME_CONTROL_PASSWORD (see --help) and run again.');
+}
 if (list.http !== 200)
   fail(`GET /devices returned HTTP ${list.http}: ${JSON.stringify(list.body?.error ?? list.body)}`);
 
@@ -217,9 +267,9 @@ if (opts.execute) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ command: '__probe__' }),
   });
-  if (first.http === 403) {
+  if (first.http === 403 && first.body?.error?.code === 'actions_disabled') {
     fail(
-      'Device actions are disabled on the API. Set DEVICE_ACTIONS_ENABLED=true in .env (trusted network only), ' +
+      'Device actions are disabled on the API. Set DEVICE_ACTIONS_ENABLED=true in .env, ' +
         'restart the API and run again.',
     );
   }

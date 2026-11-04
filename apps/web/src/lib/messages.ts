@@ -13,6 +13,11 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   unauthorized: 'O Home Assistant recusou o token da API.',
   conflict: 'Esta solicitação conflita com uma anterior.',
   not_found: 'Dispositivo não encontrado.',
+  auth_required: 'Sua sessão terminou. Entre de novo.',
+  invalid_credentials: 'Senha incorreta.',
+  csrf_invalid: 'A solicitação foi recusada por segurança. Recarregue a página.',
+  too_many_requests: 'Muitas tentativas. Aguarde um pouco.',
+  setup_required: 'Crie a senha antes de entrar.',
 };
 
 export const FALLBACK_ERROR = 'Não foi possível executar a ação.';

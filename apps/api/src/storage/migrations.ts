@@ -46,6 +46,30 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    id: 2,
+    name: 'single_user_auth',
+    sql: `
+      -- At most one row: this is a single-user system. Only a salted scrypt hash is stored.
+      CREATE TABLE auth_credential (
+        id             INTEGER PRIMARY KEY CHECK (id = 1),
+        password_hash  TEXT NOT NULL,
+        created_at     TEXT NOT NULL,
+        updated_at     TEXT NOT NULL
+      );
+
+      -- The session token itself lives only in the browser cookie. Here only its SHA-256 is kept, so a
+      -- copy of the database cannot be used to impersonate a session.
+      CREATE TABLE auth_sessions (
+        id_hash       TEXT PRIMARY KEY,
+        csrf_token    TEXT NOT NULL,
+        created_at    TEXT NOT NULL,
+        last_seen_at  TEXT NOT NULL,
+        expires_at    TEXT NOT NULL
+      );
+      CREATE INDEX idx_auth_sessions_expires ON auth_sessions(expires_at);
+    `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');

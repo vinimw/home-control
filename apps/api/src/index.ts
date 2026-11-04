@@ -36,6 +36,7 @@ const app = buildServer({
   homeAssistant: config.homeAssistant,
   deviceRefreshIntervalMs: config.deviceRefreshIntervalMs,
   deviceActions: { enabled: config.deviceActionsEnabled },
+  auth: { enabled: config.authEnabled, cookieSecure: config.authCookieSecure },
 });
 
 app.log.info(
@@ -43,9 +44,17 @@ app.log.info(
     dataDir: config.dataDir,
     homeAssistant: config.homeAssistant ? 'configured' : 'not configured',
     deviceActions: config.deviceActionsEnabled ? 'enabled' : 'disabled',
+    auth: config.authEnabled ? 'enabled' : 'DISABLED',
   },
   'configuration loaded',
 );
+if (!config.authEnabled) {
+  app.log.warn(
+    'AUTHENTICATION IS DISABLED (AUTH_ENABLED=false): anyone who can reach this API can read and control devices. Development only.',
+  );
+}
+app.auth.purgeExpired();
+app.auth.announceSetup();
 app.log.info(
   { ...storage.summary(), migrationsApplied: storage.migration.applied },
   'database ready',

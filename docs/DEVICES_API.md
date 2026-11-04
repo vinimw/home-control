@@ -3,11 +3,12 @@
 Read devices and send them actions. The API exposes a **canonical, capability-driven** model: clients
 never see Home Assistant entity ids and never choose a Home Assistant service.
 
-> **Security status.** There is **no authentication yet** (planned in #26). Therefore:
+> **Security.** Every endpoint below needs a **login session** (HttpOnly cookie); state-changing requests
+> also need the session's CSRF token in the `x-csrf-token` header. Without a session the API answers
+> `401 auth_required`, and without the token `403 csrf_invalid`. See [SECURITY.md](SECURITY.md).
 >
-> - `GET` endpoints are open (read-only).
-> - `POST /devices/:id/actions` is **disabled by default**: it returns `403 actions_disabled` until you set
->   `DEVICE_ACTIONS_ENABLED=true`. Enable it only on a network you trust.
+> `POST /devices/:id/actions` can also be switched off with `DEVICE_ACTIONS_ENABLED=false`
+> (`403 actions_disabled`). It follows `AUTH_ENABLED` when unset, so it is on whenever a login is.
 
 ## Endpoints
 
@@ -113,7 +114,10 @@ If the request is rejected **before** execution the body is a plain error, never
 | HTTP | `code`               | When                                                                                                 |
 | ---- | -------------------- | ---------------------------------------------------------------------------------------------------- |
 | 400  | `bad_request`        | Invalid JSON, wrong body shape, unknown field, bad `requestId`, bad query.                           |
-| 403  | `actions_disabled`   | `DEVICE_ACTIONS_ENABLED` is not `true`.                                                              |
+| 401  | `auth_required`      | No valid session.                                                                                    |
+| 403  | `csrf_invalid`       | Missing or wrong `x-csrf-token` on a state-changing request.                                         |
+| 403  | `actions_disabled`   | `DEVICE_ACTIONS_ENABLED` is `false`.                                                                 |
+| 429  | `too_many_requests`  | Rate limit hit (see `Retry-After`).                                                                  |
 | 404  | `not_found`          | Unknown device id (including entity ids and malformed ids), unknown route.                           |
 | 409  | `device_unavailable` | The device is `unavailable`.                                                                         |
 | 409  | `conflict`           | `requestId` reused with a different command or params for that device.                               |
@@ -192,20 +196,21 @@ and `room` (the user's room when assigned, otherwise the Home Assistant area).
 ## Manual verification
 
 ```bash
-# 1. enable actions (trusted network only) and start the API
-echo 'DEVICE_ACTIONS_ENABLED=true' >> .env && pnpm dev     # or: docker compose up -d --force-recreate api
+# 1. log in (the API listens on localhost only); keep the cookie and read the CSRF token
+CSRF=$(curl -s -c jar -X POST localhost:3001/auth/login -H 'content-type: application/json' \
+  -d '{"password":"<your password>"}' | jq -r .csrfToken)
 
 # 2. find a device and its commands
-curl -s localhost:3001/devices | jq '.devices[] | {id, name, commands: [.commands[].name]}'
+curl -s -b jar localhost:3001/devices | jq '.devices[] | {id, name, commands: [.commands[].name]}'
 
-# 3. send a supported action, then an unsupported one
-curl -s -X POST localhost:3001/devices/<id>/actions -H 'content-type: application/json' -d '{"command":"turn_off"}'
-curl -s -X POST localhost:3001/devices/<id>/actions -H 'content-type: application/json' -d '{"command":"homeassistant.restart"}'   # 422
+# 3. send a supported action, then an unsupported one (writes need the CSRF header)
+curl -s -b jar -H "x-csrf-token: $CSRF" -X POST localhost:3001/devices/<id>/actions -H 'content-type: application/json' -d '{"command":"turn_off"}'
+curl -s -b jar -H "x-csrf-token: $CSRF" -X POST localhost:3001/devices/<id>/actions -H 'content-type: application/json' -d '{"command":"homeassistant.restart"}'   # 422
 ```
 
 ## Limitations
 
-- No authentication, authorization or rate limiting yet (see the security note above).
+- Single user, single role: a session can do everything. Rate limits are in-memory (see [SECURITY.md](SECURITY.md)).
 - Actions are not persisted or audited (command history is a later task).
 - Events are not replayed: a client that was disconnected must reload `GET /devices` (the web app does).
 - Verified against a simulated Home Assistant, not a real one. Service names and the state each command

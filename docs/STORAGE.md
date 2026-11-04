@@ -25,6 +25,8 @@ and prints an "experimental" warning, which the scripts and the Docker image sil
 | `rooms`             | Rooms defined by the user (`rm_` + 12 hex id, unique case/accent-insensitive name, order). |
 | `device_settings`   | Per device: alias, favorite, room. Keyed by the **opaque, stable device id**.              |
 | `settings`          | App settings as JSON values (currently `homeName`).                                        |
+| `auth_credential`   | The single password as a salted scrypt hash (at most one row).                             |
+| `auth_sessions`     | Sessions: SHA-256 of the token (never the token), CSRF token, expiry.                      |
 | `schema_migrations` | Applied migrations with a checksum.                                                        |
 
 Design choices worth knowing:
@@ -89,5 +91,5 @@ docker compose up -d
 ## Limitations
 
 - Single API process (SQLite file, synchronous access).
-- The write endpoints have no authentication yet (see [DEVICES_API.md](DEVICES_API.md)).
+- Every endpoint, including the write ones, needs a login (see [SECURITY.md](SECURITY.md)).
 - Only the metadata above is persisted; command history is a later task.
