@@ -3,13 +3,18 @@ import {
   DEFAULT_APP_SETTINGS,
   type AlexaCommand,
   type AlexaCommandInput,
+  type AlexaExecutionStatus,
   type AppSettings,
+  type CustomDeviceAction,
+  type CustomDeviceInput,
   type Room,
 } from '@home-control/shared';
 import type { Database } from './database.js';
 import {
   DuplicateRoomError,
   type AlexaCommandRepository,
+  type CustomDeviceRecord,
+  type CustomDeviceRepository,
   type AuthRepository,
   type SpotifyConnectionRecord,
   type SpotifyRepository,
@@ -474,6 +479,139 @@ export class SqliteAlexaCommandRepository implements AlexaCommandRepository {
 
   count(): number {
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM alexa_commands').get() as { n: number };
+    return Number(row.n);
+  }
+}
+
+interface CustomDeviceRow {
+  id: string;
+  name: string;
+  room_id: string | null;
+  favorite: number;
+  on_command_id: string | null;
+  off_command_id: string | null;
+  last_action: string | null;
+  last_status: string | null;
+  last_error_code: string | null;
+  last_error_msg: string | null;
+  last_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+const toCustomDevice = (row: CustomDeviceRow): CustomDeviceRecord => ({
+  id: row.id,
+  name: row.name,
+  roomId: row.room_id,
+  favorite: row.favorite === 1,
+  onCommandId: row.on_command_id,
+  offCommandId: row.off_command_id,
+  lastCommand:
+    row.last_action && row.last_status && row.last_at
+      ? {
+          action: row.last_action as CustomDeviceAction,
+          status: row.last_status as AlexaExecutionStatus,
+          at: row.last_at,
+          errorCode: row.last_error_code,
+          errorMessage: row.last_error_msg,
+        }
+      : null,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export class SqliteCustomDeviceRepository implements CustomDeviceRepository {
+  constructor(private readonly db: Database) {}
+
+  list(): CustomDeviceRecord[] {
+    const rows = this.db
+      .prepare('SELECT * FROM custom_devices ORDER BY created_at, id')
+      .all() as unknown as CustomDeviceRow[];
+    return rows.map(toCustomDevice);
+  }
+
+  get(id: string): CustomDeviceRecord | undefined {
+    const row = this.db.prepare('SELECT * FROM custom_devices WHERE id = ?').get(id) as
+      CustomDeviceRow | undefined;
+    return row && toCustomDevice(row);
+  }
+
+  create(input: CustomDeviceInput): CustomDeviceRecord {
+    const id = `cd_${randomBytes(6).toString('hex')}`;
+    const timestamp = now();
+    this.db
+      .prepare(
+        `INSERT INTO custom_devices (id, name, room_id, favorite, on_command_id, off_command_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.name,
+        input.roomId,
+        input.favorite ? 1 : 0,
+        input.onCommandId,
+        input.offCommandId,
+        timestamp,
+        timestamp,
+      );
+    return this.get(id)!;
+  }
+
+  update(id: string, change: Partial<CustomDeviceInput>): CustomDeviceRecord | undefined {
+    const current = this.get(id);
+    if (!current) return undefined;
+    const pick = <T>(value: T | undefined, fallback: T): T =>
+      value === undefined ? fallback : value;
+    this.db
+      .prepare(
+        `UPDATE custom_devices
+         SET name = ?, room_id = ?, favorite = ?, on_command_id = ?, off_command_id = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        pick(change.name, current.name),
+        pick(change.roomId, current.roomId),
+        pick(change.favorite, current.favorite) ? 1 : 0,
+        pick(change.onCommandId, current.onCommandId),
+        pick(change.offCommandId, current.offCommandId),
+        now(),
+        id,
+      );
+    return this.get(id);
+  }
+
+  recordCommand(
+    id: string,
+    result: {
+      action: CustomDeviceAction;
+      status: AlexaExecutionStatus;
+      at: string;
+      errorCode?: string;
+      errorMessage?: string;
+    },
+  ): void {
+    // Not `updated_at`: sending a command is not an edit of the card.
+    this.db
+      .prepare(
+        `UPDATE custom_devices
+         SET last_action = ?, last_status = ?, last_error_code = ?, last_error_msg = ?, last_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        result.action,
+        result.status,
+        result.errorCode ?? null,
+        result.errorMessage ?? null,
+        result.at,
+        id,
+      );
+  }
+
+  delete(id: string): boolean {
+    return Number(this.db.prepare('DELETE FROM custom_devices WHERE id = ?').run(id).changes) > 0;
+  }
+
+  count(): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM custom_devices').get() as { n: number };
     return Number(row.n);
   }
 }

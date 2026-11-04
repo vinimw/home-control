@@ -1,4 +1,12 @@
-import type { AlexaCommand, AlexaCommandInput, AppSettings, Room } from '@home-control/shared';
+import type {
+  AlexaCommand,
+  AlexaCommandInput,
+  AlexaExecutionStatus,
+  AppSettings,
+  CustomDeviceAction,
+  CustomDeviceInput,
+  Room,
+} from '@home-control/shared';
 
 /**
  * Repository interfaces: the rest of the API depends on these, not on SQLite, so the storage can be
@@ -118,6 +126,47 @@ export interface AlexaCommandRepository {
   create(input: AlexaCommandInput): AlexaCommand;
   /** Returns `undefined` when the command does not exist. */
   update(id: string, change: Partial<AlexaCommandInput>): AlexaCommand | undefined;
+  delete(id: string): boolean;
+  count(): number;
+}
+
+/** A custom card exactly as stored (links are resolved against the saved commands by the service). */
+export interface CustomDeviceRecord {
+  id: string;
+  name: string;
+  roomId: string | null;
+  favorite: boolean;
+  onCommandId: string | null;
+  offCommandId: string | null;
+  lastCommand: {
+    action: CustomDeviceAction;
+    status: AlexaExecutionStatus;
+    at: string;
+    errorCode: string | null;
+    errorMessage: string | null;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomDeviceRepository {
+  /** Oldest first, so the list does not reshuffle when a card is edited. */
+  list(): CustomDeviceRecord[];
+  get(id: string): CustomDeviceRecord | undefined;
+  create(input: CustomDeviceInput): CustomDeviceRecord;
+  /** Returns `undefined` when the card does not exist. */
+  update(id: string, change: Partial<CustomDeviceInput>): CustomDeviceRecord | undefined;
+  /** Records a request that was actually sent. */
+  recordCommand(
+    id: string,
+    result: {
+      action: CustomDeviceAction;
+      status: AlexaExecutionStatus;
+      at: string;
+      errorCode?: string;
+      errorMessage?: string;
+    },
+  ): void;
   delete(id: string): boolean;
   count(): number;
 }

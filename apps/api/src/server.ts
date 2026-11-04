@@ -9,7 +9,9 @@ import { DeviceEventHub } from './devices/events.js';
 import { DeviceRegistry } from './devices/registry.js';
 import { HomeAssistantService, type HomeAssistantSettings } from './homeassistant/service.js';
 import { AlexaCommandService } from './alexa/service.js';
+import { CustomDeviceService } from './custom-devices/service.js';
 import { registerAlexaRoutes } from './routes/alexa.js';
+import { registerCustomDeviceRoutes } from './routes/custom-devices.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerRoomRoutes } from './routes/rooms.js';
@@ -31,6 +33,7 @@ declare module 'fastify' {
     deviceEvents: DeviceEventHub;
     deviceActions: DeviceActionService;
     alexa: AlexaCommandService;
+    customDevices: CustomDeviceService;
   }
 }
 
@@ -139,6 +142,10 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       enabled: () => app.deviceActions.enabled,
     }),
   );
+  app.decorate(
+    'customDevices',
+    new CustomDeviceService({ storage: app.storage, registry: app.devices, alexa: app.alexa }),
+  );
   registerAuthGate(app);
   const purgeTimer = setInterval(() => app.auth.purgeExpired(), 60 * 60 * 1000);
   purgeTimer.unref();
@@ -188,6 +195,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerSettingsRoutes(app);
   registerSpotifyRoutes(app);
   registerAlexaRoutes(app);
+  registerCustomDeviceRoutes(app);
 
   return app;
 }

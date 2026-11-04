@@ -176,6 +176,21 @@ and `room` (the user's room when assigned, otherwise the Home Assistant area).
 Saved Alexa text commands, their execution and draft tests have their own endpoints (`/alexa/...`), described in
 [ALEXA.md](ALEXA.md). An Echo shows the `voice_command` capability.
 
+## Custom devices (`/custom-devices`)
+
+Cards the user configures for things controlled through saved Alexa commands. See `docs/ALEXA.md`.
+
+| Method | Path                          | Notes                                                                                                                                                                  |
+| ------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/custom-devices`             | Cards with each button's `status` (`ready`, `unset`, `missing_command`, `echo_missing`, `echo_unavailable`) and `lastCommand`.                                         |
+| POST   | `/custom-devices`             | `{ name, roomId?, favorite?, onCommandId?, offCommandId? }`. Stores only.                                                                                              |
+| PATCH  | `/custom-devices/:id`         | Any of the fields above. Stores only.                                                                                                                                  |
+| DELETE | `/custom-devices/:id`         | Saved commands are untouched.                                                                                                                                          |
+| POST   | `/custom-devices/:id/execute` | `{ action: "on" \| "off" }` only. `202 accepted`, or the cause's status with `status: "failed"`. `409` for an unmapped/deleted command or a request already in flight. |
+
+Mappings must point at a saved command and a room that exist when saved (`422` otherwise). There is no
+`confirmed`: the physical state is never inferred.
+
 ## How arbitrary execution is prevented
 
 1. The client sends a **canonical command** (`set_volume`), never a Home Assistant service or entity.

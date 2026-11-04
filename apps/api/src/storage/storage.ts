@@ -4,6 +4,7 @@ import { runMigrations, type MigrationResult } from './migrations.js';
 import type {
   AlexaCommandRepository,
   AuthRepository,
+  CustomDeviceRepository,
   SpotifyRepository,
   DeviceSettingsRepository,
   RoomRepository,
@@ -12,6 +13,7 @@ import type {
 import {
   SqliteAlexaCommandRepository,
   SqliteAuthRepository,
+  SqliteCustomDeviceRepository,
   SqliteSpotifyRepository,
   SqliteDeviceSettingsRepository,
   SqliteRoomRepository,
@@ -33,6 +35,7 @@ export class Storage {
   readonly auth: AuthRepository;
   readonly spotify: SpotifyRepository;
   readonly alexa: AlexaCommandRepository;
+  readonly customDevices: CustomDeviceRepository;
 
   private constructor(
     private readonly db: Database,
@@ -44,6 +47,7 @@ export class Storage {
     this.auth = new SqliteAuthRepository(db);
     this.spotify = new SqliteSpotifyRepository(db);
     this.alexa = new SqliteAlexaCommandRepository(db);
+    this.customDevices = new SqliteCustomDeviceRepository(db);
   }
 
   /** Opens the database file and brings the schema up to date. Throws {@link StorageError}. */

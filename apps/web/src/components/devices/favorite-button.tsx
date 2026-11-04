@@ -1,16 +1,15 @@
 'use client';
 
 import { Star } from 'lucide-react';
-import type { Device } from '@home-control/shared';
 import { cn } from '@/lib/utils';
 
 /** Favorite toggle with a 44px touch target. */
-export function FavoriteButton({
+export function FavoriteButton<T extends { name: string; favorite: boolean }>({
   device,
   onToggle,
 }: {
-  device: Device;
-  onToggle: (device: Device) => void;
+  device: T;
+  onToggle: (device: T) => void;
 }) {
   return (
     <button

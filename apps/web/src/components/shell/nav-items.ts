@@ -21,6 +21,7 @@ export const PARENT_ROUTES: Readonly<
   Record<string, { href: string; label: string; title: string }>
 > = {
   '/design': { href: '/settings', label: 'Ajustes', title: 'Componentes' },
+  '/devices/custom': { href: '/devices', label: 'Dispositivos', title: 'Cartões' },
   '/echo': { href: '/devices', label: 'Dispositivos', title: 'Echo' },
 };
 
