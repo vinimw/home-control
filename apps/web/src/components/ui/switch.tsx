@@ -9,7 +9,9 @@ export function Switch({ className, ...props }: React.ComponentProps<typeof Swit
   return (
     <SwitchPrimitive.Root
       className={cn(
-        'peer inline-flex h-7 w-12 shrink-0 items-center rounded-full border-2 border-transparent transition-colors',
+        'peer relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-2 border-transparent transition-colors',
+        // The visible switch stays 28px; the tappable area grows to 44px.
+        "before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']",
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'data-[state=checked]:bg-primary data-[state=unchecked]:bg-input',

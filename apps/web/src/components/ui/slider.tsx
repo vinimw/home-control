@@ -28,7 +28,7 @@ export function Slider({
       <SliderPrimitive.Thumb
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
-        className="block size-6 rounded-full border-2 border-primary bg-background shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none disabled:pointer-events-none"
+        className="relative block size-6 rounded-full border-2 border-primary bg-background shadow-sm transition-colors before:absolute before:-inset-3 before:content-['']  focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none disabled:pointer-events-none"
       />
     </SliderPrimitive.Root>
   );

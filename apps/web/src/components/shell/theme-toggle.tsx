@@ -45,7 +45,11 @@ export function ThemeSelector() {
   const mounted = useMounted();
 
   return (
-    <div role="radiogroup" aria-label="Tema" className="inline-flex rounded-lg border p-1">
+    <div
+      role="radiogroup"
+      aria-label="Tema"
+      className="inline-flex max-w-full flex-wrap rounded-lg border p-1"
+    >
       {OPTIONS.map(({ value, label, icon: Icon }) => {
         const selected = mounted && theme === value;
         return (
@@ -56,7 +60,7 @@ export function ThemeSelector() {
             aria-checked={selected}
             onClick={() => setTheme(value)}
             className={cn(
-              'inline-flex h-10 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors',
+              'inline-flex h-11 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors',
               'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
               selected
                 ? 'bg-primary text-primary-foreground'

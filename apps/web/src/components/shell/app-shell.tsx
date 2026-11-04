@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react';
-import { House } from 'lucide-react';
-import { LogoutButton } from '@/components/auth/logout-button';
+import { AppHeader } from './app-header';
 import { BottomNav } from './bottom-nav';
 import { Sidebar } from './sidebar';
-import { ThemeToggle } from './theme-toggle';
 
 /**
  * Responsive shell: bottom tab bar on phones, sidebar from `md` up.
@@ -20,22 +18,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
       <Sidebar />
       <div className="md:pl-60">
-        <header className="sticky top-0 z-20 border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-            <span className="flex items-center gap-2 font-semibold md:invisible">
-              <House aria-hidden className="size-5 text-primary" />
-              Home Control
-            </span>
-            <div className="flex items-center gap-1">
-              <ThemeToggle />
-              <LogoutButton />
-            </div>
-          </div>
-        </header>
+        <AppHeader />
         <main
           id="conteudo"
           tabIndex={-1}
-          className="mx-auto w-full max-w-5xl px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none md:pb-10"
+          className="mx-auto w-full max-w-5xl px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:py-6 outline-none md:pb-10"
         >
           {children}
         </main>

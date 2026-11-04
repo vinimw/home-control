@@ -5,13 +5,15 @@ import { CircleAlert, LayoutGrid, RefreshCw, SearchX, WifiOff } from 'lucide-rea
 import type { Device, DeviceListResponse } from '@home-control/shared';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { executeDeviceCommand, updateDeviceSettings } from '@/lib/devices-client';
 import { cn } from '@/lib/utils';
 import { CATEGORIES, categoryOf, NO_ROOM_LABEL, type CategoryId } from './categories';
-import { DeviceTile } from './device-tile';
+import { DeviceRow } from './device-row';
+import { DeviceTile, isControllable } from './device-tile';
 import { useDevices, type Connection } from './use-devices';
 
 const CONNECTION_BADGE: Record<
@@ -113,11 +115,11 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
   const unavailable = summary?.byAvailability.unavailable ?? 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dispositivos</h1>
-          <p className="text-sm text-muted-foreground">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Dispositivos</h1>
+          <p className="text-xs text-muted-foreground md:text-sm">
             {loaded && summary
               ? `${summary.total} ${summary.total === 1 ? 'dispositivo' : 'dispositivos'}${
                   unavailable > 0 ? ` · ${unavailable} indisponível(is)` : ''
@@ -125,16 +127,22 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
               : 'Carregando…'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           <Badge variant={badge.variant} data-testid="connection">
             {badge.label}
           </Badge>
-          <Button variant="outline" onClick={() => void refresh()} disabled={refreshing}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Atualizar"
+            title="Atualizar"
+            onClick={() => void refresh()}
+            disabled={refreshing}
+          >
             <RefreshCw
               aria-hidden
               className={cn(refreshing && 'animate-spin motion-reduce:animate-none')}
             />
-            Atualizar
           </Button>
         </div>
       </div>
@@ -212,37 +220,42 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
         />
       ) : (
         <>
-          <div className="flex flex-col gap-3">
-            <div role="group" aria-label="Filtrar por categoria" className="flex flex-wrap gap-2">
-              {filters.map((f) => (
-                <Button
-                  key={f.id}
-                  size="sm"
-                  variant={activeFilter === f.id ? 'default' : 'outline'}
-                  aria-pressed={activeFilter === f.id}
-                  onClick={() => setFilter(f.id)}
-                >
-                  {f.label}
-                </Button>
-              ))}
-            </div>
-            {rooms.length > 0 ? (
-              <label className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Cômodo</span>
+          {/* Sticky under the app bar: the filters stay in reach however far the list scrolls. */}
+          <div className="sticky top-[calc(3rem+env(safe-area-inset-top))] z-10 -mx-4 border-b bg-background/95 backdrop-blur md:top-[calc(3.5rem+env(safe-area-inset-top))]">
+            <div className="flex items-center gap-2 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] md:flex-wrap md:overflow-visible">
+              {rooms.length > 0 ? (
                 <select
+                  aria-label="Cômodo"
                   value={activeRoom}
                   onChange={(event) => setRoomId(event.target.value)}
-                  className="h-11 rounded-md border border-input bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="h-11 shrink-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:h-9"
                 >
-                  <option value="all">Todos</option>
+                  <option value="all">Todos os cômodos</option>
                   {rooms.map(([id, name]) => (
                     <option key={id} value={id}>
                       {name}
                     </option>
                   ))}
                 </select>
-              </label>
-            ) : null}
+              ) : null}
+              <div
+                role="group"
+                aria-label="Filtrar por categoria"
+                className="flex items-center gap-2 md:flex-wrap"
+              >
+                {filters.map((f) => (
+                  <Button
+                    key={f.id}
+                    size="chip"
+                    variant={activeFilter === f.id ? 'default' : 'outline'}
+                    aria-pressed={activeFilter === f.id}
+                    onClick={() => setFilter(f.id)}
+                  >
+                    {f.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {visible.length === 0 ? (
@@ -262,21 +275,42 @@ export function DevicesDashboard({ initial }: { initial: DeviceListResponse | nu
               </Button>
             </EmptyState>
           ) : (
-            groups.map((group) => (
-              <section key={group.room} aria-label={group.room} className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold tracking-tight">{group.room}</h2>
-                <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {group.devices.map((device) => (
-                    <DeviceTile
-                      key={device.id}
-                      device={device}
-                      onCommand={onCommand}
-                      onToggleFavorite={onToggleFavorite}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))
+            groups.map((group) => {
+              const controllable = group.devices.filter(isControllable);
+              const readOnly = group.devices.filter((device) => !isControllable(device));
+              return (
+                <section key={group.room} aria-label={group.room} className="flex flex-col gap-2">
+                  <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    {group.room}
+                  </h2>
+                  {controllable.length > 0 ? (
+                    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {controllable.map((device) => (
+                        <DeviceTile
+                          key={device.id}
+                          device={device}
+                          onCommand={onCommand}
+                          onToggleFavorite={onToggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {readOnly.length > 0 ? (
+                    <Card>
+                      <ul className="divide-y">
+                        {readOnly.map((device) => (
+                          <DeviceRow
+                            key={device.id}
+                            device={device}
+                            onToggleFavorite={onToggleFavorite}
+                          />
+                        ))}
+                      </ul>
+                    </Card>
+                  ) : null}
+                </section>
+              );
+            })
           )}
         </>
       )}

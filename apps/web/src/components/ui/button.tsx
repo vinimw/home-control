@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
   [
-    'inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap',
+    'inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium',
     'transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
     'focus-visible:ring-offset-background focus-visible:outline-none',
     'disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
@@ -21,10 +21,15 @@ const buttonVariants = cva(
       },
       // Default and large sizes keep a 44px touch target (Apple HIG).
       size: {
-        default: 'h-11 px-4',
-        sm: 'h-9 px-3',
-        lg: 'h-12 px-6 text-base',
+        // Labels may wrap (large text sizes); the height is a minimum, never a clip.
+        default: 'min-h-11 px-4 py-2',
+        sm: 'min-h-9 px-3 py-1',
+        lg: 'min-h-12 px-6 py-2 text-base',
         icon: 'size-11',
+        // Filter chips: 44px on touch screens, compact with a mouse.
+        chip: 'h-11 px-4 whitespace-nowrap md:h-9 md:px-3',
+        // Icon on phones, icon + text from `md` up (the text is hidden below).
+        'icon-md': 'size-11 md:size-auto md:h-9 md:px-3',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

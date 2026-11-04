@@ -6,8 +6,8 @@ export const metadata: Metadata = { title: 'Cenas' };
 
 export default function ScenesPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Cenas</h1>
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Cenas</h1>
       <EmptyState
         icon={Clapperboard}
         title="Cenas ainda não disponíveis"
