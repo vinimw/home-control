@@ -7,6 +7,9 @@ try {
   console.log('Configuration OK');
   console.log(`  API:            ${config.host}:${config.port}`);
   console.log(`  Data directory: ${config.dataDir}`);
+  console.log(
+    `  Authentication: ${config.authEnabled ? 'enabled' : 'DISABLED (development only)'}`,
+  );
   console.log(`  Home Assistant: ${config.homeAssistant?.url} (token set)`);
 } catch (error) {
   if (error instanceof ConfigError) {

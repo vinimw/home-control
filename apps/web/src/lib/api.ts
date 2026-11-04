@@ -6,19 +6,27 @@ import {
   type HealthResponse,
   type HomeAssistantStatusResponse,
 } from '@home-control/shared';
+import { redirect } from 'next/navigation';
 import { env } from './env';
+import { cookieHeader } from './session';
 
 async function getJson<T>(path: string): Promise<T | null> {
+  let unauthorized = false;
+  let result: T | null = null;
   try {
     const response = await fetch(`${env.API_INTERNAL_URL}${path}`, {
       cache: 'no-store',
+      headers: await cookieHeader(),
       signal: AbortSignal.timeout(3000),
     });
-    return response.ok ? ((await response.json()) as T) : null;
+    unauthorized = response.status === 401;
+    result = response.ok ? ((await response.json()) as T) : null;
   } catch {
     // Unreachable, timed out or invalid JSON: reported as "unknown", never as a fake value.
-    return null;
   }
+  // Outside the try: `redirect` works by throwing.
+  if (unauthorized) redirect('/login');
+  return result;
 }
 
 /** Server-side only: the initial device list, or `null` when the API cannot be reached. */

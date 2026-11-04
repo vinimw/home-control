@@ -3,6 +3,8 @@ import { DEFAULT_APP_SETTINGS, type AppSettings, type Room } from '@home-control
 import type { Database } from './database.js';
 import {
   DuplicateRoomError,
+  type AuthRepository,
+  type SessionRecord,
   type DeviceSettingsChange,
   type DeviceSettingsRecord,
   type DeviceSettingsRepository,
@@ -190,5 +192,96 @@ export class SqliteSettingsRepository implements SettingsRepository {
     if (change.homeName !== undefined)
       upsert.run('homeName', JSON.stringify(change.homeName), now());
     return this.get();
+  }
+}
+
+interface SessionRow {
+  id_hash: string;
+  csrf_token: string;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+}
+
+export class SqliteAuthRepository implements AuthRepository {
+  constructor(private readonly db: Database) {}
+
+  getPasswordHash(): string | undefined {
+    const row = this.db.prepare('SELECT password_hash FROM auth_credential WHERE id = 1').get() as
+      { password_hash: string } | undefined;
+    return row?.password_hash;
+  }
+
+  setPasswordHash(hash: string): void {
+    const timestamp = now();
+    this.db
+      .prepare(
+        `INSERT INTO auth_credential (id, password_hash, created_at, updated_at) VALUES (1, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash, updated_at = excluded.updated_at`,
+      )
+      .run(hash, timestamp, timestamp);
+  }
+
+  clearCredential(): void {
+    this.db.exec('DELETE FROM auth_credential; DELETE FROM auth_sessions;');
+  }
+
+  createSession(session: SessionRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO auth_sessions (id_hash, csrf_token, created_at, last_seen_at, expires_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(
+        session.idHash,
+        session.csrfToken,
+        session.createdAt,
+        session.lastSeenAt,
+        session.expiresAt,
+      );
+  }
+
+  getSession(idHash: string): SessionRecord | undefined {
+    const row = this.db
+      .prepare(
+        'SELECT id_hash, csrf_token, created_at, last_seen_at, expires_at FROM auth_sessions WHERE id_hash = ?',
+      )
+      .get(idHash) as SessionRow | undefined;
+    return (
+      row && {
+        idHash: row.id_hash,
+        csrfToken: row.csrf_token,
+        createdAt: row.created_at,
+        lastSeenAt: row.last_seen_at,
+        expiresAt: row.expires_at,
+      }
+    );
+  }
+
+  touchSession(idHash: string, lastSeenAt: string, expiresAt: string): void {
+    this.db
+      .prepare('UPDATE auth_sessions SET last_seen_at = ?, expires_at = ? WHERE id_hash = ?')
+      .run(lastSeenAt, expiresAt, idHash);
+  }
+
+  deleteSession(idHash: string): void {
+    this.db.prepare('DELETE FROM auth_sessions WHERE id_hash = ?').run(idHash);
+  }
+
+  deleteSessions(exceptIdHash?: string): number {
+    const result = exceptIdHash
+      ? this.db.prepare('DELETE FROM auth_sessions WHERE id_hash <> ?').run(exceptIdHash)
+      : this.db.prepare('DELETE FROM auth_sessions').run();
+    return Number(result.changes);
+  }
+
+  purgeExpired(at: string): number {
+    const result = this.db.prepare('DELETE FROM auth_sessions WHERE expires_at <= ?').run(at);
+    return Number(result.changes);
+  }
+
+  countSessions(): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get() as { n: number };
+    return row.n;
   }
 }

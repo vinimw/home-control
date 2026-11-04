@@ -1,6 +1,6 @@
 import { API_DEVICE_EVENTS_PATH } from '@home-control/shared';
 import { env } from '@/lib/env';
-import { errorResponse } from '@/lib/proxy';
+import { errorResponse, forwardedHeaders } from '@/lib/proxy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,9 +10,12 @@ export async function GET(request: Request) {
   try {
     const upstream = await fetch(`${env.API_INTERNAL_URL}${API_DEVICE_EVENTS_PATH}`, {
       cache: 'no-store',
-      headers: { accept: 'text/event-stream' },
+      headers: { accept: 'text/event-stream', ...forwardedHeaders(request) },
       signal: request.signal,
     });
+    if (upstream.status === 401) {
+      return errorResponse('auth_required', 'Authentication required', 401);
+    }
     if (!upstream.ok || !upstream.body) {
       return errorResponse('unreachable', 'The event stream is not available', 502);
     }

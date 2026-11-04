@@ -92,8 +92,16 @@ export function registerDeviceRoutes(app: FastifyInstance): void {
     send('ready', { serverTime: new Date().toISOString() });
     unsubscribe = app.deviceEvents.subscribe((message) => send(message.event, message.data));
     // Comment lines keep idle connections alive through proxies and let the client notice a dead link.
+    const sessionId = request.authSession?.idHash;
     heartbeat = setInterval(() => {
-      if (!raw.destroyed && !raw.writableEnded) raw.write(': ping\n\n');
+      if (raw.destroyed || raw.writableEnded) return;
+      // A stream must not outlive the session that opened it (logout, expiry, password change).
+      if (sessionId && !app.auth.isActive(sessionId)) {
+        send('unauthorized', { reason: 'session_ended' });
+        close();
+        return;
+      }
+      raw.write(': ping\n\n');
     }, HEARTBEAT_MS);
     heartbeat.unref();
 

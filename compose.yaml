@@ -13,8 +13,10 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: '3001'
       DATA_DIR: /data
+    # Loopback only: the API is reached through the web app. Opening it to the LAN would expose a second,
+    # unfiltered door; set API_BIND_ADDRESS=0.0.0.0 only if you know why you need it.
     ports:
-      - '${API_HOST_PORT:-3001}:3001'
+      - '${API_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-3001}:3001'
     volumes:
       - api-data:/data
     restart: unless-stopped
@@ -26,8 +28,10 @@ services:
     environment:
       # Server-side calls reach the API through the Compose network.
       API_INTERNAL_URL: http://api:3001
+    # Reachable from the home network (phones, tablets). Never forward this port on the router; for access
+    # away from home use a VPN. Set WEB_BIND_ADDRESS=127.0.0.1 to keep it on this computer only.
     ports:
-      - '${WEB_HOST_PORT:-3000}:3000'
+      - '${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_HOST_PORT:-3000}:3000'
     depends_on:
       api:
         condition: service_healthy

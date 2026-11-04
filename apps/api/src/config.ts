@@ -36,10 +36,23 @@ const schema = z
       .min(1000, 'must be between 1000 and 60000')
       .max(60_000, 'must be between 1000 and 60000')
       .default(10_000),
-    DEVICE_ACTIONS_ENABLED: z
+    // Unset means "on exactly when authentication is on".
+    DEVICE_ACTIONS_ENABLED: optionalString.pipe(
+      z
+        .enum(['true', 'false', '1', '0'], { message: 'must be true or false' })
+        .optional()
+        .transform((value) =>
+          value === undefined ? undefined : value === 'true' || value === '1',
+        ),
+    ),
+    AUTH_ENABLED: z
       .enum(['true', 'false', '1', '0'], { message: 'must be true or false' })
-      .default('false')
+      .default('true')
       .transform((value) => value === 'true' || value === '1'),
+    AUTH_COOKIE_SECURE: z
+      .enum(['auto', 'true', 'false'], { message: 'must be auto, true or false' })
+      .default('auto'),
+    NODE_ENV: optionalString,
     DEVICE_REFRESH_INTERVAL_MS: z.coerce
       .number({ message: 'must be a number' })
       .int('must be an integer')
@@ -48,6 +61,13 @@ const schema = z
       .default(300_000),
   })
   .superRefine((env, ctx) => {
+    if (!env.AUTH_ENABLED && env.NODE_ENV === 'production') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AUTH_ENABLED'],
+        message: 'cannot be false in production: authentication is mandatory outside development',
+      });
+    }
     if (env.HOME_ASSISTANT_URL && !env.HOME_ASSISTANT_TOKEN) {
       ctx.addIssue({
         code: 'custom',
@@ -71,6 +91,9 @@ export interface AppConfig {
   dataDir: string;
   deviceRefreshIntervalMs: number;
   deviceActionsEnabled: boolean;
+  /** False only for local development (refused when NODE_ENV=production). */
+  authEnabled: boolean;
+  authCookieSecure: 'auto' | boolean;
   homeAssistant: { url: string; token: string; timeoutMs: number } | null;
 }
 
@@ -115,7 +138,10 @@ export function loadConfig(
     logLevel: parsed.LOG_LEVEL,
     dataDir: resolve(parsed.DATA_DIR),
     deviceRefreshIntervalMs: parsed.DEVICE_REFRESH_INTERVAL_MS,
-    deviceActionsEnabled: parsed.DEVICE_ACTIONS_ENABLED,
+    deviceActionsEnabled: parsed.DEVICE_ACTIONS_ENABLED ?? parsed.AUTH_ENABLED,
+    authEnabled: parsed.AUTH_ENABLED,
+    authCookieSecure:
+      parsed.AUTH_COOKIE_SECURE === 'auto' ? 'auto' : parsed.AUTH_COOKIE_SECURE === 'true',
     homeAssistant:
       url && token
         ? { url: url.replace(/\/+$/, ''), token, timeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS }

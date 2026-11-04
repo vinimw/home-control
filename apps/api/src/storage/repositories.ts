@@ -51,3 +51,30 @@ export interface SettingsRepository {
   get(): AppSettings;
   update(change: Partial<AppSettings>): AppSettings;
 }
+
+export interface SessionRecord {
+  /** SHA-256 of the session token. The token itself is never stored. */
+  idHash: string;
+  csrfToken: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+}
+
+export interface AuthRepository {
+  /** The password hash, or `undefined` before the first-run setup. */
+  getPasswordHash(): string | undefined;
+  /** Creates or replaces the single credential. */
+  setPasswordHash(hash: string): void;
+  clearCredential(): void;
+
+  createSession(session: SessionRecord): void;
+  getSession(idHash: string): SessionRecord | undefined;
+  touchSession(idHash: string, lastSeenAt: string, expiresAt: string): void;
+  deleteSession(idHash: string): void;
+  /** Deletes every session, optionally keeping one. Returns how many were removed. */
+  deleteSessions(exceptIdHash?: string): number;
+  /** Removes sessions whose absolute expiry has passed. */
+  purgeExpired(now: string): number;
+  countSessions(): number;
+}

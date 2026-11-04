@@ -58,11 +58,15 @@ power-on button for this TV, and the TV must be switched on manually or by remot
 
 ```bash
 pnpm build
+# The API requires a login: give the probe your password through the environment
+# (not on the command line, where it would stay in your shell history)
+export HOME_CONTROL_PASSWORD='...'
+
 # 1. read-only: capability matrix, nothing is sent to the TV
 pnpm device:probe --type tv
 
 # 2. guided control (volume/mute round trips, restores the original values)
-#    needs DEVICE_ACTIONS_ENABLED=true in .env and an API restart (trusted network only)
+#    needs device actions enabled (they are on by default when the login is on)
 pnpm device:probe --type tv --execute
 
 # 3. disruptive: re-selects the current source and powers the TV OFF (and back on if offered)

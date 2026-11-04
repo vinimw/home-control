@@ -49,8 +49,14 @@ See [STORAGE.md](STORAGE.md).
 
 `GET /devices`, `GET /devices/:id` and `POST /devices/:id/actions`. Actions accept only canonical commands the
 device advertises, validate params strictly, and are routed to Home Assistant through a fixed server-side
-table; results are `accepted`, `confirmed` or `failed`. Actions are disabled by default until authentication
-exists. See [DEVICES_API.md](DEVICES_API.md).
+table; results are `accepted`, `confirmed` or `failed`. See [DEVICES_API.md](DEVICES_API.md).
+
+## Security
+
+A single-user login protects everything: the API denies every route without a session (HttpOnly cookie,
+CSRF token on writes, rate limits), and the web app relays a fixed list of routes so the browser never talks
+to the API or sees a Home Assistant token. Only the web app is published to the home network; the API stays
+on loopback. See [SECURITY.md](SECURITY.md).
 
 ## Web app
 

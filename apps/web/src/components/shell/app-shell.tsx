@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { House } from 'lucide-react';
+import { LogoutButton } from '@/components/auth/logout-button';
 import { BottomNav } from './bottom-nav';
 import { Sidebar } from './sidebar';
 import { ThemeToggle } from './theme-toggle';
@@ -25,7 +26,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               <House aria-hidden className="size-5 text-primary" />
               Home Control
             </span>
-            <ThemeToggle />
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <LogoutButton />
+            </div>
           </div>
         </header>
         <main
