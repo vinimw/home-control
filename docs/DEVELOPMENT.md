@@ -51,6 +51,9 @@ Error messages name the variable and the rule but never print values, so tokens 
 | `HOME_ASSISTANT_TIMEOUT_MS`  | api     | `10000`                 | REST timeout, 1000-60000                                                  |
 | `DEVICE_REFRESH_INTERVAL_MS` | api     | `300000`                | Device registry full resync, 5000-3600000                                 |
 | `DEVICE_ACTIONS_ENABLED`     | api     | follows `AUTH_ENABLED`  | `false` makes the dashboard read-only                                     |
+| `SPOTIFY_CLIENT_ID`          | api     | unset                   | Spotify app client id (PKCE, no secret). Set with the redirect URI        |
+| `SPOTIFY_REDIRECT_URI`       | api     | unset                   | `https` or `http://127.0.0.1:<port>/api/spotify/callback`; see SPOTIFY.md |
+| `APP_SECRET_KEY`             | api     | key file in `DATA_DIR`  | Base64 32 bytes encrypting stored tokens (`openssl rand -base64 32`)      |
 | `AUTH_ENABLED`               | api     | `true`                  | `false` only for local dev; refused when `NODE_ENV=production`            |
 | `AUTH_COOKIE_SECURE`         | api     | `auto`                  | `auto`, `true` or `false`; see [SECURITY.md](SECURITY.md)                 |
 | `API_BIND_ADDRESS`           | compose | `127.0.0.1`             | Interface the API port is published on (keep on loopback)                 |

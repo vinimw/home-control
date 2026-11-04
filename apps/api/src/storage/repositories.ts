@@ -78,3 +78,35 @@ export interface AuthRepository {
   purgeExpired(now: string): number;
   countSessions(): number;
 }
+
+export interface SpotifyConnectionRecord {
+  /** Encrypted. `null` after the authorization stopped working. */
+  accessTokenEnc: string | null;
+  refreshTokenEnc: string | null;
+  expiresAt: string | null;
+  scope: string;
+  userId: string;
+  displayName: string | null;
+  product: string | null;
+  connectedAt: string;
+  reauthRequired: boolean;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+}
+
+export interface SpotifyRepository {
+  get(): SpotifyConnectionRecord | undefined;
+  /** Creates or replaces the single connection. */
+  save(record: SpotifyConnectionRecord): void;
+  /** Updates only the tokens (after a refresh). */
+  updateTokens(tokens: {
+    accessTokenEnc: string;
+    refreshTokenEnc: string;
+    expiresAt: string;
+    scope?: string;
+  }): void;
+  /** Drops the tokens and flags the connection as needing a new authorization. */
+  markReauthRequired(error: { code: string; message: string }): void;
+  setLastError(error: { code: string; message: string } | null): void;
+  clear(): void;
+}

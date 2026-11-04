@@ -58,6 +58,11 @@ CSRF token on writes, rate limits), and the web app relays a fixed list of route
 to the API or sees a Home Assistant token. Only the web app is published to the home network; the API stays
 on loopback. See [SECURITY.md](SECURITY.md).
 
+## Spotify
+
+OAuth (PKCE) happens on the API; tokens are encrypted at rest and never reach the browser. The first step is
+read-only: account, devices, playlists, playback state. See [SPOTIFY.md](SPOTIFY.md).
+
 ## Web app
 
 Mobile-first Next.js shell with Tailwind/shadcn-style primitives, light/dark themes and device controls

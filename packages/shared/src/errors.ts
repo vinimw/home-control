@@ -23,6 +23,10 @@ export type ApiErrorCode =
   | 'csrf_invalid'
   /** Login attempted before the first-run setup. */
   | 'setup_required'
+  /** The Spotify account is not connected (or must be connected again). */
+  | 'spotify_connect_required'
+  /** Spotify refused the request (for example the account is not allowed to use this app). */
+  | 'spotify_forbidden'
   | 'internal_error';
 
 export interface ApiErrorPayload {

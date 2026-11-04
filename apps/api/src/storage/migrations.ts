@@ -70,6 +70,29 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX idx_auth_sessions_expires ON auth_sessions(expires_at);
     `,
   },
+  {
+    id: 3,
+    name: 'spotify_connection',
+    sql: `
+      -- At most one row. The tokens are stored ENCRYPTED (AES-256-GCM, key outside the database): a copy of
+      -- the database file alone cannot be used to reach the Spotify account.
+      CREATE TABLE spotify_connection (
+        id                  INTEGER PRIMARY KEY CHECK (id = 1),
+        access_token_enc    TEXT,
+        refresh_token_enc   TEXT,
+        expires_at          TEXT,
+        scope               TEXT NOT NULL DEFAULT '',
+        user_id             TEXT NOT NULL,
+        display_name        TEXT,
+        product             TEXT,
+        connected_at        TEXT NOT NULL,
+        reauth_required     INTEGER NOT NULL DEFAULT 0 CHECK (reauth_required IN (0, 1)),
+        last_error_code     TEXT,
+        last_error_message  TEXT,
+        updated_at          TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');

@@ -7,6 +7,7 @@ try {
   console.log('Configuration OK');
   console.log(`  API:            ${config.host}:${config.port}`);
   console.log(`  Data directory: ${config.dataDir}`);
+  console.log(`  Spotify:        ${config.spotify ? 'configured' : 'not configured'}`);
   console.log(
     `  Authentication: ${config.authEnabled ? 'enabled' : 'DISABLED (development only)'}`,
   );

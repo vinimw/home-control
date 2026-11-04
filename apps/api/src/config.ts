@@ -45,6 +45,9 @@ const schema = z
           value === undefined ? undefined : value === 'true' || value === '1',
         ),
     ),
+    SPOTIFY_CLIENT_ID: optionalString,
+    SPOTIFY_REDIRECT_URI: optionalString,
+    APP_SECRET_KEY: optionalString,
     AUTH_ENABLED: z
       .enum(['true', 'false', '1', '0'], { message: 'must be true or false' })
       .default('true')
@@ -61,6 +64,45 @@ const schema = z
       .default(300_000),
   })
   .superRefine((env, ctx) => {
+    if (env.SPOTIFY_CLIENT_ID && !env.SPOTIFY_REDIRECT_URI) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SPOTIFY_REDIRECT_URI'],
+        message: 'is required when SPOTIFY_CLIENT_ID is set',
+      });
+    }
+    if (env.SPOTIFY_REDIRECT_URI && !env.SPOTIFY_CLIENT_ID) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SPOTIFY_CLIENT_ID'],
+        message: 'is required when SPOTIFY_REDIRECT_URI is set',
+      });
+    }
+    if (env.SPOTIFY_REDIRECT_URI) {
+      let url: URL | null = null;
+      try {
+        url = new URL(env.SPOTIFY_REDIRECT_URI);
+      } catch {
+        // reported below
+      }
+      const loopback =
+        url && url.protocol === 'http:' && ['127.0.0.1', '[::1]'].includes(url.hostname);
+      if (!url || !(url.protocol === 'https:' || loopback)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['SPOTIFY_REDIRECT_URI'],
+          message:
+            'must be https, or http on the loopback IP http://127.0.0.1:<port>/... (Spotify does not accept "localhost")',
+        });
+      }
+    }
+    if (env.APP_SECRET_KEY && Buffer.from(env.APP_SECRET_KEY, 'base64').length !== 32) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['APP_SECRET_KEY'],
+        message: 'must be 32 random bytes encoded as base64 (openssl rand -base64 32)',
+      });
+    }
     if (!env.AUTH_ENABLED && env.NODE_ENV === 'production') {
       ctx.addIssue({
         code: 'custom',
@@ -94,6 +136,10 @@ export interface AppConfig {
   /** False only for local development (refused when NODE_ENV=production). */
   authEnabled: boolean;
   authCookieSecure: 'auto' | boolean;
+  /** Spotify app (public client: PKCE, no client secret). `null` when not configured. */
+  spotify: { clientId: string; redirectUri: string } | null;
+  /** Base64 key for encrypting tokens at rest; when unset a key file is created in the data directory. */
+  appSecretKey: string | undefined;
   homeAssistant: { url: string; token: string; timeoutMs: number } | null;
 }
 
@@ -139,6 +185,11 @@ export function loadConfig(
     dataDir: resolve(parsed.DATA_DIR),
     deviceRefreshIntervalMs: parsed.DEVICE_REFRESH_INTERVAL_MS,
     deviceActionsEnabled: parsed.DEVICE_ACTIONS_ENABLED ?? parsed.AUTH_ENABLED,
+    spotify:
+      parsed.SPOTIFY_CLIENT_ID && parsed.SPOTIFY_REDIRECT_URI
+        ? { clientId: parsed.SPOTIFY_CLIENT_ID, redirectUri: parsed.SPOTIFY_REDIRECT_URI }
+        : null,
+    appSecretKey: parsed.APP_SECRET_KEY,
     authEnabled: parsed.AUTH_ENABLED,
     authCookieSecure:
       parsed.AUTH_COOKIE_SECURE === 'auto' ? 'auto' : parsed.AUTH_COOKIE_SECURE === 'true',

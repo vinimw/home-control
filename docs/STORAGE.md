@@ -20,14 +20,15 @@ and prints an "experimental" warning, which the scripts and the Docker image sil
 
 ## What is stored
 
-| Table               | Purpose                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `rooms`             | Rooms defined by the user (`rm_` + 12 hex id, unique case/accent-insensitive name, order). |
-| `device_settings`   | Per device: alias, favorite, room. Keyed by the **opaque, stable device id**.              |
-| `settings`          | App settings as JSON values (currently `homeName`).                                        |
-| `auth_credential`   | The single password as a salted scrypt hash (at most one row).                             |
-| `auth_sessions`     | Sessions: SHA-256 of the token (never the token), CSRF token, expiry.                      |
-| `schema_migrations` | Applied migrations with a checksum.                                                        |
+| Table                | Purpose                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `rooms`              | Rooms defined by the user (`rm_` + 12 hex id, unique case/accent-insensitive name, order). |
+| `device_settings`    | Per device: alias, favorite, room. Keyed by the **opaque, stable device id**.              |
+| `settings`           | App settings as JSON values (currently `homeName`).                                        |
+| `auth_credential`    | The single password as a salted scrypt hash (at most one row).                             |
+| `auth_sessions`      | Sessions: SHA-256 of the token (never the token), CSRF token, expiry.                      |
+| `spotify_connection` | The connected Spotify account and its **encrypted** tokens (at most one row).              |
+| `schema_migrations`  | Applied migrations with a checksum.                                                        |
 
 Design choices worth knowing:
 

@@ -12,6 +12,9 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerDeviceRoutes } from './routes/devices.js';
 import { registerRoomRoutes } from './routes/rooms.js';
 import { registerSettingsRoutes } from './routes/settings.js';
+import { registerSpotifyRoutes } from './routes/spotify.js';
+import { SecretBox } from './spotify/secret-box.js';
+import { SpotifyService, type SpotifyEndpoints, type SpotifySettings } from './spotify/service.js';
 import { Storage } from './storage/index.js';
 import { registerHomeAssistantRoutes } from './routes/homeassistant.js';
 
@@ -20,6 +23,7 @@ declare module 'fastify' {
     homeAssistant: HomeAssistantService;
     storage: Storage;
     auth: AuthService;
+    spotify: SpotifyService;
     devices: DeviceRegistry;
     catalog: DeviceCatalog;
     deviceEvents: DeviceEventHub;
@@ -33,6 +37,10 @@ export interface ServerOptions {
   logLevel?: string;
   homeAssistant?: HomeAssistantSettings | null;
   deviceRefreshIntervalMs?: number;
+  /** Spotify app settings (`null`/absent: not configured). `endpoints` is only overridden by tests. */
+  spotify?: SpotifySettings & { endpoints?: SpotifyEndpoints };
+  /** Key for encrypting stored tokens. A random one per process when absent (tests). */
+  secrets?: SecretBox;
   /** Device actions can be switched off independently of authentication. */
   deviceActions?: { enabled: boolean; confirmTimeoutMs?: number };
   /**
@@ -67,6 +75,18 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
 
   app.decorate('homeAssistant', new HomeAssistantService(options.homeAssistant ?? null, app.log));
   app.decorate('storage', options.storage ?? Storage.openInMemory());
+  app.decorate(
+    'spotify',
+    new SpotifyService({
+      settings: options.spotify
+        ? { clientId: options.spotify.clientId, redirectUri: options.spotify.redirectUri }
+        : null,
+      endpoints: options.spotify?.endpoints,
+      repo: app.storage.spotify,
+      secrets: options.secrets ?? SecretBox.random(),
+      logger: app.log,
+    }),
+  );
   app.decorate(
     'auth',
     new AuthService(app.storage.auth, {
@@ -146,6 +166,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerDeviceRoutes(app);
   registerRoomRoutes(app);
   registerSettingsRoutes(app);
+  registerSpotifyRoutes(app);
 
   return app;
 }

@@ -28,6 +28,8 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   invalid_credentials: 401,
   csrf_invalid: 403,
   setup_required: 409,
+  spotify_connect_required: 409,
+  spotify_forbidden: 502,
   device_unavailable: 409,
   unsupported_action: 422,
   invalid_params: 422,

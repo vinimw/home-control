@@ -63,6 +63,11 @@ server, kept in memory only and sent on every write. A `401` anywhere (for examp
 another device) sends the browser back to `/login`. **Sair** is in the header; **Ajustes > Segurança**
 changes the password. Details and limits: [SECURITY.md](SECURITY.md).
 
+**Ajustes > Spotify** (`components/spotify/`) connects the account, lists devices and playlists and
+disconnects (with `ConfirmDialog`). The browser only talks to the `/api/spotify/*` relay (a fixed allowlist of
+routes and methods); `/api/spotify/callback` turns Spotify's redirect into a redirect to
+`/settings?spotify=connected|denied|error`, so a code or token never reaches the page. See [SPOTIFY.md](SPOTIFY.md).
+
 ## Theming
 
 Light and dark via CSS variables (`globals.css`) and `next-themes` (class strategy, follows the system by
