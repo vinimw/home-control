@@ -1,4 +1,4 @@
-import type { AppSettings, Room } from '@home-control/shared';
+import type { AlexaCommand, AlexaCommandInput, AppSettings, Room } from '@home-control/shared';
 
 /**
  * Repository interfaces: the rest of the API depends on these, not on SQLite, so the storage can be
@@ -109,4 +109,15 @@ export interface SpotifyRepository {
   markReauthRequired(error: { code: string; message: string }): void;
   setLastError(error: { code: string; message: string } | null): void;
   clear(): void;
+}
+
+export interface AlexaCommandRepository {
+  /** Oldest first, so the list does not reshuffle when a command is edited. */
+  list(): AlexaCommand[];
+  get(id: string): AlexaCommand | undefined;
+  create(input: AlexaCommandInput): AlexaCommand;
+  /** Returns `undefined` when the command does not exist. */
+  update(id: string, change: Partial<AlexaCommandInput>): AlexaCommand | undefined;
+  delete(id: string): boolean;
+  count(): number;
 }

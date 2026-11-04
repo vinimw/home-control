@@ -49,7 +49,9 @@ export type DeviceCapability =
   /** Navigation keys (arrows, OK, Home, Back) sent through a remote-control entity. */
   | 'remote'
   /** Launching applications installed on the device. */
-  | 'apps';
+  | 'apps'
+  /** Can be sent Alexa text commands (an Echo). */
+  | 'voice_command';
 
 /** Keys a remote-capable device can be sent. Each device only advertises the ones it can really press. */
 export const REMOTE_KEYS = ['up', 'down', 'left', 'right', 'ok', 'home', 'back'] as const;

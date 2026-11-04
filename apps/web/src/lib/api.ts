@@ -1,5 +1,7 @@
 import {
+  API_ALEXA_COMMANDS_PATH,
   API_HA_STATUS_PATH,
+  type AlexaCommandListResponse,
   API_DEVICES_PATH,
   API_HEALTH_PATH,
   type DeviceListResponse,
@@ -32,6 +34,11 @@ async function getJson<T>(path: string): Promise<T | null> {
 /** Server-side only: the initial device list, or `null` when the API cannot be reached. */
 export function getDevices(): Promise<DeviceListResponse | null> {
   return getJson<DeviceListResponse>(API_DEVICES_PATH);
+}
+
+/** Server-side only: the saved Alexa commands, or `null` when the API cannot be reached. */
+export function getAlexaCommands(): Promise<AlexaCommandListResponse | null> {
+  return getJson<AlexaCommandListResponse>(API_ALEXA_COMMANDS_PATH);
 }
 
 export interface SystemStatus {

@@ -2,6 +2,7 @@ import { IN_MEMORY, openDatabase, type Database } from './database.js';
 import { StorageError } from './errors.js';
 import { runMigrations, type MigrationResult } from './migrations.js';
 import type {
+  AlexaCommandRepository,
   AuthRepository,
   SpotifyRepository,
   DeviceSettingsRepository,
@@ -9,6 +10,7 @@ import type {
   SettingsRepository,
 } from './repositories.js';
 import {
+  SqliteAlexaCommandRepository,
   SqliteAuthRepository,
   SqliteSpotifyRepository,
   SqliteDeviceSettingsRepository,
@@ -30,6 +32,7 @@ export class Storage {
   readonly settings: SettingsRepository;
   readonly auth: AuthRepository;
   readonly spotify: SpotifyRepository;
+  readonly alexa: AlexaCommandRepository;
 
   private constructor(
     private readonly db: Database,
@@ -40,6 +43,7 @@ export class Storage {
     this.settings = new SqliteSettingsRepository(db);
     this.auth = new SqliteAuthRepository(db);
     this.spotify = new SqliteSpotifyRepository(db);
+    this.alexa = new SqliteAlexaCommandRepository(db);
   }
 
   /** Opens the database file and brings the schema up to date. Throws {@link StorageError}. */

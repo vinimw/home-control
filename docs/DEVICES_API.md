@@ -171,6 +171,11 @@ and `room` (the user's room when assigned, otherwise the Home Assistant area).
 > These write endpoints are **not authenticated yet** (#26) and are enabled by default: they only change
 > labels and never control a device, so the risk is limited to someone on your LAN renaming things.
 
+## Alexa commands
+
+Saved Alexa text commands, their execution and draft tests have their own endpoints (`/alexa/...`), described in
+[ALEXA.md](ALEXA.md). An Echo shows the `voice_command` capability.
+
 ## How arbitrary execution is prevented
 
 1. The client sends a **canonical command** (`set_volume`), never a Home Assistant service or entity.

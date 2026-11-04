@@ -93,6 +93,23 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    id: 4,
+    name: 'alexa_commands',
+    sql: `
+      -- Commands the USER wrote. Nothing is pre-populated and nothing here is ever executed by storing it.
+      -- device_id is the opaque Echo device id, deliberately without a foreign key: the command survives
+      -- discovery refreshes and an Echo that is temporarily missing (execution re-checks the target).
+      CREATE TABLE alexa_commands (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        text        TEXT NOT NULL,
+        device_id   TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');
