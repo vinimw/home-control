@@ -1,6 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { API_AUTH_PATH, API_HEALTH_PATH, CSRF_HEADER, SESSION_COOKIE } from '@home-control/shared';
+import {
+  API_AUTH_PATH,
+  API_HEALTH_PATH,
+  API_SPOTIFY_PATH,
+  CSRF_HEADER,
+  SESSION_COOKIE,
+} from '@home-control/shared';
 import { ApiError } from '../errors.js';
 import type { AuthSession } from './service.js';
 import { WindowLimiter } from './throttle.js';
@@ -18,6 +24,8 @@ const PUBLIC_ROUTES = new Set([
   `GET ${API_AUTH_PATH}/session`,
   `POST ${API_AUTH_PATH}/login`,
   `POST ${API_AUTH_PATH}/setup`,
+  // Spotify sends the browser here without our cookie; the single-use `state` authorizes it.
+  `GET ${API_SPOTIFY_PATH}/callback`,
 ]);
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

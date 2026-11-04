@@ -4,6 +4,8 @@ import type { Database } from './database.js';
 import {
   DuplicateRoomError,
   type AuthRepository,
+  type SpotifyConnectionRecord,
+  type SpotifyRepository,
   type SessionRecord,
   type DeviceSettingsChange,
   type DeviceSettingsRecord,
@@ -283,5 +285,116 @@ export class SqliteAuthRepository implements AuthRepository {
   countSessions(): number {
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM auth_sessions').get() as { n: number };
     return row.n;
+  }
+}
+
+interface SpotifyRow {
+  access_token_enc: string | null;
+  refresh_token_enc: string | null;
+  expires_at: string | null;
+  scope: string;
+  user_id: string;
+  display_name: string | null;
+  product: string | null;
+  connected_at: string;
+  reauth_required: number;
+  last_error_code: string | null;
+  last_error_message: string | null;
+}
+
+export class SqliteSpotifyRepository implements SpotifyRepository {
+  constructor(private readonly db: Database) {}
+
+  get(): SpotifyConnectionRecord | undefined {
+    const row = this.db.prepare('SELECT * FROM spotify_connection WHERE id = 1').get() as
+      SpotifyRow | undefined;
+    return (
+      row && {
+        accessTokenEnc: row.access_token_enc,
+        refreshTokenEnc: row.refresh_token_enc,
+        expiresAt: row.expires_at,
+        scope: row.scope,
+        userId: row.user_id,
+        displayName: row.display_name,
+        product: row.product,
+        connectedAt: row.connected_at,
+        reauthRequired: row.reauth_required === 1,
+        lastErrorCode: row.last_error_code,
+        lastErrorMessage: row.last_error_message,
+      }
+    );
+  }
+
+  save(record: SpotifyConnectionRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO spotify_connection
+           (id, access_token_enc, refresh_token_enc, expires_at, scope, user_id, display_name, product,
+            connected_at, reauth_required, last_error_code, last_error_message, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           access_token_enc = excluded.access_token_enc, refresh_token_enc = excluded.refresh_token_enc,
+           expires_at = excluded.expires_at, scope = excluded.scope, user_id = excluded.user_id,
+           display_name = excluded.display_name, product = excluded.product,
+           connected_at = excluded.connected_at, reauth_required = excluded.reauth_required,
+           last_error_code = excluded.last_error_code, last_error_message = excluded.last_error_message,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        record.accessTokenEnc,
+        record.refreshTokenEnc,
+        record.expiresAt,
+        record.scope,
+        record.userId,
+        record.displayName,
+        record.product,
+        record.connectedAt,
+        record.reauthRequired ? 1 : 0,
+        record.lastErrorCode,
+        record.lastErrorMessage,
+        now(),
+      );
+  }
+
+  updateTokens(tokens: {
+    accessTokenEnc: string;
+    refreshTokenEnc: string;
+    expiresAt: string;
+    scope?: string;
+  }): void {
+    this.db
+      .prepare(
+        `UPDATE spotify_connection SET access_token_enc = ?, refresh_token_enc = ?, expires_at = ?,
+           scope = COALESCE(?, scope), reauth_required = 0, last_error_code = NULL,
+           last_error_message = NULL, updated_at = ? WHERE id = 1`,
+      )
+      .run(
+        tokens.accessTokenEnc,
+        tokens.refreshTokenEnc,
+        tokens.expiresAt,
+        tokens.scope ?? null,
+        now(),
+      );
+  }
+
+  markReauthRequired(error: { code: string; message: string }): void {
+    this.db
+      .prepare(
+        `UPDATE spotify_connection SET access_token_enc = NULL, refresh_token_enc = NULL, expires_at = NULL,
+           reauth_required = 1, last_error_code = ?, last_error_message = ?, updated_at = ? WHERE id = 1`,
+      )
+      .run(error.code, error.message, now());
+  }
+
+  setLastError(error: { code: string; message: string } | null): void {
+    this.db
+      .prepare(
+        'UPDATE spotify_connection SET last_error_code = ?, last_error_message = ?, updated_at = ? WHERE id = 1',
+      )
+      .run(error?.code ?? null, error?.message ?? null, now());
+  }
+
+  clear(): void {
+    this.db.exec('DELETE FROM spotify_connection');
   }
 }

@@ -3,12 +3,14 @@ import { StorageError } from './errors.js';
 import { runMigrations, type MigrationResult } from './migrations.js';
 import type {
   AuthRepository,
+  SpotifyRepository,
   DeviceSettingsRepository,
   RoomRepository,
   SettingsRepository,
 } from './repositories.js';
 import {
   SqliteAuthRepository,
+  SqliteSpotifyRepository,
   SqliteDeviceSettingsRepository,
   SqliteRoomRepository,
   SqliteSettingsRepository,
@@ -27,6 +29,7 @@ export class Storage {
   readonly deviceSettings: DeviceSettingsRepository;
   readonly settings: SettingsRepository;
   readonly auth: AuthRepository;
+  readonly spotify: SpotifyRepository;
 
   private constructor(
     private readonly db: Database,
@@ -36,6 +39,7 @@ export class Storage {
     this.deviceSettings = new SqliteDeviceSettingsRepository(db);
     this.settings = new SqliteSettingsRepository(db);
     this.auth = new SqliteAuthRepository(db);
+    this.spotify = new SqliteSpotifyRepository(db);
   }
 
   /** Opens the database file and brings the schema up to date. Throws {@link StorageError}. */

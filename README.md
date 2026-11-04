@@ -31,6 +31,9 @@ Full guide, configuration reference and troubleshooting: [docs/DEVELOPMENT.md](d
 - Web: http://localhost:3000
 - API: http://localhost:3001 (health check: `GET /health`; everything else needs a login)
 
+**Spotify** (optional): connect your account to see devices and playlists. Needs your own Spotify app:
+[docs/SPOTIFY.md](docs/SPOTIFY.md).
+
 **Login.** On the first run the API prints a one-time setup code in its log; open the web app, enter it and
 create your password. Forgot it, how sessions work and what is (not) protected:
 [docs/SECURITY.md](docs/SECURITY.md). Never forward the ports on your router.

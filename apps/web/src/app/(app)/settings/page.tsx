@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SpotifyCard } from '@/components/spotify/spotify-card';
 import { ChangePasswordForm } from '@/components/auth/change-password-form';
 import { ThemeSelector } from '@/components/shell/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export const metadata: Metadata = { title: 'Ajustes' };
 
-export default function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ spotify?: string }>;
+}) {
+  const { spotify } = await searchParams;
+  const outcome =
+    spotify === 'connected' || spotify === 'denied' || spotify === 'error' ? spotify : undefined;
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Ajustes</h1>
@@ -31,6 +40,18 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ChangePasswordForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Spotify</CardTitle>
+          <CardDescription>
+            Sua conta para ver dispositivos e playlists. Os acessos ficam só no servidor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SpotifyCard outcome={outcome} />
         </CardContent>
       </Card>
 

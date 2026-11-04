@@ -1,6 +1,7 @@
 import { ConfigError, loadConfig } from './config.js';
 import { join } from 'node:path';
 import { buildServer } from './server.js';
+import { loadSecretBox } from './spotify/secret-box.js';
 import { Storage, StorageError } from './storage/index.js';
 
 function readConfig() {
@@ -37,6 +38,8 @@ const app = buildServer({
   deviceRefreshIntervalMs: config.deviceRefreshIntervalMs,
   deviceActions: { enabled: config.deviceActionsEnabled },
   auth: { enabled: config.authEnabled, cookieSecure: config.authCookieSecure },
+  spotify: config.spotify ?? undefined,
+  secrets: loadSecretBox(config.dataDir, config.appSecretKey),
 });
 
 app.log.info(
@@ -45,6 +48,7 @@ app.log.info(
     homeAssistant: config.homeAssistant ? 'configured' : 'not configured',
     deviceActions: config.deviceActionsEnabled ? 'enabled' : 'disabled',
     auth: config.authEnabled ? 'enabled' : 'DISABLED',
+    spotify: config.spotify ? 'configured' : 'not configured',
   },
   'configuration loaded',
 );
