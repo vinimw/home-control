@@ -20,17 +20,40 @@ const AVAILABILITY: Record<
   unavailable: {
     label: 'Indisponível',
     variant: 'danger',
-    note: 'O dispositivo está offline ou desconectado. Os controles ficam desativados.',
+    note: 'Offline ou desconectado. Controles desativados.',
   },
   unknown: {
     label: 'Sem leitura',
     variant: 'warning',
-    note: 'O dispositivo ainda não informou o estado.',
+    note: 'Ainda não informou o estado.',
   },
 };
 
+/**
+ * Availability, always stated in text. A normal device gets a small dot (its name is read out as
+ * "Disponível"); anything abnormal gets a labelled badge, so it stands out without relying on color alone.
+ */
+export function AvailabilityIndicator({ availability }: { availability: DeviceAvailability }) {
+  const info = AVAILABILITY[availability];
+  if (availability === 'available') {
+    return (
+      <span
+        role="img"
+        aria-label={info.label}
+        title={info.label}
+        className="inline-block size-2.5 shrink-0 rounded-full bg-success"
+      />
+    );
+  }
+  return <Badge variant={info.variant}>{info.label}</Badge>;
+}
+
+export const availabilityNote = (availability: DeviceAvailability): string | undefined =>
+  AVAILABILITY[availability].note;
+
 interface DeviceCardProps {
   name: string;
+  /** Shown under the name. Omit it when the card already sits under a room heading. */
   room?: string | null;
   availability: DeviceAvailability;
   /** Extra header control, e.g. a favorite toggle. */
@@ -38,26 +61,26 @@ interface DeviceCardProps {
   children?: ReactNode;
 }
 
-/** Card for one device: name, room, honest availability badge and its controls. */
+/** Compact card for one device: name, honest availability and its controls. */
 export function DeviceCard({ name, room, availability, action, children }: DeviceCardProps) {
-  const info = AVAILABILITY[availability];
+  const note = availabilityNote(availability);
   const blocked = availability === 'unavailable';
 
   return (
     <DeviceControlContext.Provider value={{ disabled: blocked }}>
       <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <CardTitle>{name}</CardTitle>
-            <div className="flex shrink-0 items-center gap-1">
-              <Badge variant={info.variant}>{info.label}</Badge>
+        <CardHeader className="pb-1">
+          <div className="flex min-h-11 items-center justify-between gap-2">
+            <CardTitle className="min-w-0 text-sm [overflow-wrap:anywhere]">{name}</CardTitle>
+            <div className="-mr-1 flex shrink-0 items-center gap-1">
+              <AvailabilityIndicator availability={availability} />
               {action}
             </div>
           </div>
-          {room ? <CardDescription>{room}</CardDescription> : null}
-          {info.note ? <CardDescription>{info.note}</CardDescription> : null}
+          {room ? <CardDescription className="text-xs">{room}</CardDescription> : null}
+          {note ? <CardDescription className="text-xs">{note}</CardDescription> : null}
         </CardHeader>
-        {children ? <CardContent className="flex flex-col gap-4">{children}</CardContent> : null}
+        {children ? <CardContent className="flex flex-col gap-2">{children}</CardContent> : null}
       </Card>
     </DeviceControlContext.Provider>
   );

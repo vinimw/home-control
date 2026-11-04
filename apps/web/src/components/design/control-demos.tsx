@@ -22,7 +22,7 @@ const demoExecute = async (command: string): Promise<DeviceActionResult> => {
 
 export function ControlDemos() {
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       <DeviceCard name="TV da sala (exemplo)" room="Sala" availability="available">
         <PowerSwitch label="Ligar" checked={true} onCommand={demoExecute} />
         <LevelSlider

@@ -5,14 +5,52 @@ shadcn-style primitives (class-variance-authority + tailwind-merge + Radix) writ
 
 ## Layout and navigation
 
-- **Phones**: bottom tab bar (56 px targets, padded for the iPhone home indicator via
-  `env(safe-area-inset-bottom)`). **From `md` up**: fixed sidebar.
+- **Phones**: a compact sticky top bar and a bottom tab bar (56 px targets, padded for the iPhone home
+  indicator via `env(safe-area-inset-bottom)`). **From `md` up**: fixed sidebar.
 - `viewport-fit=cover` lets the UI extend under the notch; the header and bottom bar add safe-area padding.
   Zoom is never disabled.
 - Landmarks (`header`, `nav`, `main`), a **skip link**, `aria-current` on the active item and visible focus
   rings everywhere. Motion is reduced under `prefers-reduced-motion`.
 - Routes: `/` (system status), `/devices` (live dashboard), `/scenes`, `/settings`, `/design` (component library).
   Areas that are not built yet show an honest empty state, never fake data.
+
+## Layout rules (mobile first)
+
+These rules exist so the app is comfortable with one thumb and does not turn into endless scrolling. New
+screens must follow them (they were measured, see "Verification" below).
+
+**Where things go**
+
+- **Back** goes in the top bar, top-left, never at the end of a page. A sub-page registers its parent in
+  `PARENT_ROUTES` (`components/shell/nav-items.ts`) and `AppHeader` shows "← Parent". The bar is sticky, so
+  the back control stays in reach after scrolling. Top-level pages show the brand instead.
+- **The bottom bar is only for the four top-level destinations.** No page actions in it.
+- **Page-level controls** (filters, refresh) sit at the top; filters are sticky under the top bar and scroll
+  sideways inside their own row instead of wrapping into several rows.
+- **Destructive actions** live on the item they affect (a row button, a menu), never as a loose button at
+  the end of a page. They always ask for confirmation with `ConfirmDialog`: it says what will happen and to
+  what, is a bottom sheet on phones (buttons under the thumb), starts focus on **Cancelar**, closes with Esc
+  or a tap outside, and the page behind is inert. See the "Ação destrutiva" demo in `/design`.
+
+**Density**
+
+- Page title `text-xl` on phones (`text-2xl` from `md`), `gap-4` between blocks, cards padded `p-3`.
+- Anything that is only read (sensors, read-only players) is a one-line row in a shared card, not a card of
+  its own. A card is for something you can operate.
+- The room is the section heading, so it is not repeated inside each card. A normal device shows a small
+  green dot (read out as "Disponível"); anything abnormal shows a labelled badge (`Indisponível`,
+  `Sem leitura`), so state never relies on color alone.
+- Command status lines take no space while idle. Several one-shot buttons share a wrapping row.
+- Use `grid-cols-1` (not an implicit `auto`) for grids so a wide child cannot stretch the page.
+
+**Touch and zoom**
+
+- Every interactive element is at least 44 x 44 px on phones. Where the visible control is smaller (the
+  28 px switch, the 24 px slider thumb) a `before:` pseudo-element extends the tappable area to 44 px.
+- Button heights are minimums (`min-h-11`), so labels can wrap at large text sizes. Chips are the exception
+  (`whitespace-nowrap`, in a scrolling row).
+- Nothing may scroll sideways at 320 px, or at 200% text size (the bottom bar labels and the theme selector
+  wrap instead of overflowing).
 
 ## Login
 
@@ -34,11 +72,11 @@ needs no network access to fetch fonts.
 
 ## Components
 
-| Folder                | Contents                                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| `components/ui`       | Primitives: `Button`, `Card`, `Badge`, `Switch`, `Slider`, `Alert`, `Skeleton`, `EmptyState`     |
-| `components/controls` | Device controls: `DeviceCard`, `PowerSwitch`, `LevelSlider`, `ControlStatus`, `useDeviceCommand` |
-| `components/shell`    | `AppShell`, `Sidebar`, `BottomNav`, `ThemeToggle`                                                |
+| Folder                | Contents                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `components/ui`       | Primitives: `Button`, `Card`, `Badge`, `Switch`, `Slider`, `Alert`, `Input`, `ConfirmDialog`, ... |
+| `components/controls` | Device controls: `DeviceCard`, `PowerSwitch`, `LevelSlider`, `ControlStatus`, `useDeviceCommand`  |
+| `components/shell`    | `AppShell`, `Sidebar`, `BottomNav`, `ThemeToggle`                                                 |
 
 Open `/design` (Settings -> Components) to see every component and every command state in both themes.
 
@@ -63,8 +101,8 @@ components, so screens built from them cannot get it wrong by accident:
 
 3. **`LevelSlider` returns to the reported value** after a command that was not confirmed, so it never
    keeps showing a level the device does not have.
-4. **Availability is explicit.** `DeviceCard` shows `Disponível` / `Indisponível` / `Sem leitura` and
-   disables its controls while the device is unavailable, explaining why.
+4. **Availability is explicit.** Every device states it: a dot read out as `Disponível`, or a badge
+   `Indisponível` / `Sem leitura`. Controls are disabled while the device is unavailable, with the reason.
 5. **Demos never simulate success.** The `/design` controls always fail on purpose and the page says so.
 6. **The status page shows real data** read from the API. If the API cannot be reached, everything is shown
    as `Indisponível` / `Desconhecido` / `—`, never as OK.
@@ -113,3 +151,19 @@ and per device: available / unavailable (controls hidden or disabled) / no readi
 
 Run `pnpm check`. Manually: `pnpm dev`, open http://localhost:3000 in a narrow window (iPhone size) and a
 wide one, toggle the theme, and open `/design`.
+
+### Measured result of the mobile rework (#43)
+
+Simulated phone viewports of 375, 390 and 360 px width (not a physical phone), same data, before -> after.
+Heights are the total page height in CSS pixels at 390 px width:
+
+| Screen       | Page height                             | Elements under 44 px | Sideways overflow at 200% text |
+| ------------ | --------------------------------------- | -------------------- | ------------------------------ |
+| `/devices`   | 4497 -> **2568 px** (-43%)              | 18 -> 0 real (note)  | yes -> **none**                |
+| `/settings`  | 1009 -> 927 px                          | 5 -> 0               | yes -> **none**                |
+| `/design`    | 2519 -> 2403 px                         | 7 -> 0 real (note)   | yes -> **none**                |
+| back control | none (no way back) -> top bar, y = 2 px |                      |                                |
+
+Note: switches and slider thumbs still measure 28 / 24 px by bounding box; their tappable area is 44 px
+through a pseudo-element, verified with `elementFromPoint`. The `/devices` height depends on how many
+devices have controls, so it varies with the data (this run: 19 devices, 5 of them read-only rows).

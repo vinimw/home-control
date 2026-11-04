@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useCallback } from 'react';
-import { Pause, Play, Star, Volume1, Volume2, Zap } from 'lucide-react';
+import { memo, useCallback, type ReactNode } from 'react';
+import { Pause, Play, Volume1, Volume2, Zap } from 'lucide-react';
 import type { Device } from '@home-control/shared';
 import {
   ActionButton,
@@ -10,12 +10,30 @@ import {
   PowerSwitch,
   type ExecuteCommand,
 } from '@/components/controls';
-import { cn } from '@/lib/utils';
+import { FavoriteButton } from './favorite-button';
+
+/** Commands that produce a control. A device with none of them is shown as a compact read-only row. */
+const CONTROL_COMMANDS = new Set([
+  'turn_on',
+  'turn_off',
+  'set_brightness',
+  'set_volume',
+  'volume_up',
+  'volume_down',
+  'set_mute',
+  'play',
+  'pause',
+  'activate',
+]);
+
+export function isControllable(device: Device): boolean {
+  return device.commands.some((command) => CONTROL_COMMANDS.has(command.name));
+}
 
 const PLAYBACK_LABEL = { playing: 'Reproduzindo', paused: 'Pausado' } as const;
 
 /** Read-only facts the device reports. Shown only when the device actually reported them. */
-function readings(device: Device): string[] {
+export function readings(device: Device): string[] {
   const { state } = device;
   const lines: string[] = [];
   if (state.reading) {
@@ -59,32 +77,39 @@ function DeviceTileImpl({ device, onCommand, onToggleFavorite }: DeviceTileProps
   const canToggle = has('turn_on') && has('turn_off');
   const facts = readings(device);
 
+  const buttons: ReactNode[] = [];
+  const add = (key: string, label: string, command: string, icon?: ReactNode) =>
+    buttons.push(
+      <ActionButton
+        key={key}
+        className="min-w-[7rem] flex-1"
+        label={label}
+        icon={icon}
+        command={command}
+        onCommand={execute}
+      />,
+    );
+  if (!canToggle && has('turn_on')) add('on', 'Ligar', 'turn_on');
+  if (!canToggle && has('turn_off')) add('off', 'Desligar', 'turn_off');
+  if (!has('set_volume') && has('volume_down') && has('volume_up')) {
+    add('vol-', 'Menos volume', 'volume_down', <Volume1 aria-hidden />);
+    add('vol+', 'Mais volume', 'volume_up', <Volume2 aria-hidden />);
+  }
+  if (has('pause') && state.playback === 'playing') {
+    add('pause', 'Pausar', 'pause', <Pause aria-hidden />);
+  } else if (has('play')) {
+    add('play', 'Reproduzir', 'play', <Play aria-hidden />);
+  }
+  if (has('activate')) add('activate', 'Ativar', 'activate', <Zap aria-hidden />);
+
   return (
     <DeviceCard
       name={device.name}
-      room={device.room?.name}
       availability={device.availability}
-      action={
-        <button
-          type="button"
-          onClick={() => onToggleFavorite(device)}
-          aria-pressed={device.favorite}
-          aria-label={
-            device.favorite
-              ? `Remover ${device.name} dos favoritos`
-              : `Adicionar ${device.name} aos favoritos`
-          }
-          className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          <Star
-            aria-hidden
-            className={cn('size-5', device.favorite && 'fill-warning text-warning')}
-          />
-        </button>
-      }
+      action={<FavoriteButton device={device} onToggle={onToggleFavorite} />}
     >
       {facts.length > 0 ? (
-        <p className="text-sm text-muted-foreground">{facts.join(' · ')}</p>
+        <p className="text-xs text-muted-foreground">{facts.join(' · ')}</p>
       ) : null}
 
       {canToggle ? (
@@ -93,16 +118,7 @@ function DeviceTileImpl({ device, onCommand, onToggleFavorite }: DeviceTileProps
           checked={state.power === null ? null : state.power === 'on'}
           onCommand={execute}
         />
-      ) : (
-        <>
-          {has('turn_on') ? (
-            <ActionButton label="Ligar" command="turn_on" onCommand={execute} />
-          ) : null}
-          {has('turn_off') ? (
-            <ActionButton label="Desligar" command="turn_off" onCommand={execute} />
-          ) : null}
-        </>
-      )}
+      ) : null}
 
       {has('set_brightness') ? (
         <LevelSlider
@@ -123,22 +139,6 @@ function DeviceTileImpl({ device, onCommand, onToggleFavorite }: DeviceTileProps
           onCommand={execute}
         />
       ) : null}
-      {!has('set_volume') && has('volume_up') && has('volume_down') ? (
-        <div className="grid grid-cols-2 gap-2">
-          <ActionButton
-            label="Menos volume"
-            icon={<Volume1 aria-hidden />}
-            command="volume_down"
-            onCommand={execute}
-          />
-          <ActionButton
-            label="Mais volume"
-            icon={<Volume2 aria-hidden />}
-            command="volume_up"
-            onCommand={execute}
-          />
-        </div>
-      ) : null}
 
       {has('set_mute') ? (
         <PowerSwitch
@@ -149,30 +149,8 @@ function DeviceTileImpl({ device, onCommand, onToggleFavorite }: DeviceTileProps
         />
       ) : null}
 
-      {has('pause') && state.playback === 'playing' ? (
-        <ActionButton
-          label="Pausar"
-          icon={<Pause aria-hidden />}
-          command="pause"
-          onCommand={execute}
-        />
-      ) : has('play') ? (
-        <ActionButton
-          label="Reproduzir"
-          icon={<Play aria-hidden />}
-          command="play"
-          onCommand={execute}
-        />
-      ) : null}
-
-      {has('activate') ? (
-        <ActionButton
-          label="Ativar"
-          icon={<Zap aria-hidden />}
-          command="activate"
-          onCommand={execute}
-        />
-      ) : null}
+      {/* One-shot commands share a single wrapping row instead of one full-width button each. */}
+      {buttons.length > 0 ? <div className="flex flex-wrap gap-2">{buttons}</div> : null}
     </DeviceCard>
   );
 }

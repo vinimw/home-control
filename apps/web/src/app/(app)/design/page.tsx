@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Info, TriangleAlert } from 'lucide-react';
+import { ConfirmDemo } from '@/components/design/confirm-demo';
 import { ControlDemos } from '@/components/design/control-demos';
 import { ControlStatus } from '@/components/controls/control-status';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -44,9 +45,9 @@ function Section({
 
 export default function DesignPage() {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Componentes</h1>
+        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Componentes</h1>
         <p className="text-sm text-muted-foreground">
           Biblioteca visual usada em todo o aplicativo.
         </p>
@@ -85,7 +86,7 @@ export default function DesignPage() {
       </Section>
 
       <Section title="Avisos">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Alert variant="info">
             <Info aria-hidden />
             <AlertDescription>Informação neutra, anunciada de forma educada.</AlertDescription>
@@ -121,6 +122,13 @@ export default function DesignPage() {
         description="Disponível, indisponível (controles desativados) e sem leitura. Toque nos controles para ver uma falha honesta."
       >
         <ControlDemos />
+      </Section>
+
+      <Section
+        title="Ação destrutiva"
+        description="A ação fica na própria linha do item e pede confirmação num painel (no celular, na parte de baixo, ao alcance do polegar). O foco começa em “Cancelar”."
+      >
+        <ConfirmDemo />
       </Section>
 
       <Section title="Carregando">

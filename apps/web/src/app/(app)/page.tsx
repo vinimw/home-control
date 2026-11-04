@@ -10,9 +10,9 @@ export default async function HomePage() {
   const status = await getSystemStatus();
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Início</h1>
+        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Início</h1>
         <p className="text-sm text-muted-foreground">Visão geral da sua casa.</p>
       </div>
       <SystemStatusCard status={status} />

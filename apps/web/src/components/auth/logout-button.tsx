@@ -16,7 +16,8 @@ export function LogoutButton() {
   return (
     <Button
       variant="ghost"
-      size="sm"
+      size="icon-md"
+      aria-label="Sair"
       disabled={pending}
       onClick={async () => {
         setPending(true);
@@ -26,7 +27,7 @@ export function LogoutButton() {
       }}
     >
       <LogOut aria-hidden />
-      Sair
+      <span className="hidden md:inline">Sair</span>
     </Button>
   );
 }

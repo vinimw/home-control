@@ -23,7 +23,7 @@ export function BottomNav() {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-14 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors',
+                  'flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-1 text-center text-[11px] leading-tight font-medium [overflow-wrap:anywhere] transition-colors',
                   'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
                   active ? 'text-primary' : 'text-muted-foreground',
                 )}

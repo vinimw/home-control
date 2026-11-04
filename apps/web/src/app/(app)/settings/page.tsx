@@ -9,8 +9,8 @@ export const metadata: Metadata = { title: 'Ajustes' };
 
 export default function SettingsPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Ajustes</h1>
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Ajustes</h1>
 
       <Card>
         <CardHeader>

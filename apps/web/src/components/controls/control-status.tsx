@@ -11,7 +11,7 @@ export function ControlStatus({ state, className }: { state: CommandPhase; class
     <p
       role="status"
       aria-live="polite"
-      className={cn('flex min-h-5 items-center gap-1.5 text-sm', className)}
+      className={cn('flex items-center gap-1.5 text-sm empty:hidden', className)}
     >
       {state.phase === 'pending' && (
         <>

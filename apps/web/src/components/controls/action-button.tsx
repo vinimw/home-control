@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ControlStatus } from './control-status';
 import { useControlDisabled } from './device-card';
 import { useDeviceCommand, type ExecuteCommand } from './use-device-command';
@@ -14,6 +15,8 @@ interface ActionButtonProps {
   icon?: ReactNode;
   variant?: 'default' | 'secondary' | 'outline';
   disabled?: boolean;
+  /** Applied to the wrapper, so several buttons can share a row. */
+  className?: string;
 }
 
 /** One-shot command (activate a scene, play/pause, volume step) with the same honest status line. */
@@ -25,12 +28,13 @@ export function ActionButton({
   icon,
   variant = 'secondary',
   disabled,
+  className,
 }: ActionButtonProps) {
   const { state, run, pending } = useDeviceCommand(onCommand);
   const isDisabled = useControlDisabled(disabled) || pending;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn('flex flex-col gap-1', className)}>
       <Button
         variant={variant}
         disabled={isDisabled}
