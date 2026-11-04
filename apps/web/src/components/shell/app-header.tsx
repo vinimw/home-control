@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, House } from 'lucide-react';
 import { LogoutButton } from '@/components/auth/logout-button';
-import { PARENT_ROUTES } from './nav-items';
+import { parentOf } from './nav-items';
 import { ThemeToggle } from './theme-toggle';
 
 /**
@@ -13,7 +13,7 @@ import { ThemeToggle } from './theme-toggle';
  */
 export function AppHeader() {
   const pathname = usePathname();
-  const parent = PARENT_ROUTES[pathname];
+  const parent = parentOf(pathname);
 
   return (
     <header className="sticky top-0 z-20 border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">

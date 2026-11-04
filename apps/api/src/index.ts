@@ -36,6 +36,8 @@ const app = buildServer({
   logLevel: config.logLevel,
   homeAssistant: config.homeAssistant,
   deviceRefreshIntervalMs: config.deviceRefreshIntervalMs,
+  tvApps: config.tvApps,
+  deviceLinks: config.deviceLinks,
   deviceActions: { enabled: config.deviceActionsEnabled },
   auth: { enabled: config.authEnabled, cookieSecure: config.authCookieSecure },
   spotify: config.spotify ?? undefined,

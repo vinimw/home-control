@@ -13,6 +13,58 @@ const optionalString = z
   .optional()
   .transform((value) => (value === '' ? undefined : value));
 
+/**
+ * Applications the TV can launch, verified on the household's Samsung Q80A (see docs/SAMSUNG_TV.md).
+ * They are model/region specific: override them with `TV_APPS`.
+ */
+export const DEFAULT_TV_APPS: Readonly<Record<string, string>> = {
+  Netflix: '3201907018807',
+  'Prime Video': '3201910019365',
+  'Disney+': '3201901017640',
+  YouTube: '111299001912',
+};
+
+const validAppName = (name: string): boolean =>
+  name.length >= 1 &&
+  name.length <= 40 &&
+  [...name].every((char) => char.charCodeAt(0) > 31 && char.charCodeAt(0) !== 127);
+const APP_ID = /^[A-Za-z0-9._-]{1,64}$/;
+
+/** `null` when the value is not a valid name -> id object. */
+export function parseTvApps(raw: string): Record<string, string> | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const entries = Object.entries(value);
+  if (entries.length === 0 || entries.length > 30) return null;
+  const apps: Record<string, string> = {};
+  for (const [name, id] of entries) {
+    if (!validAppName(name) || typeof id !== 'string' || !APP_ID.test(id)) return null;
+    apps[name] = id;
+  }
+  return apps;
+}
+
+const LINK = /^(media_player\.[a-z0-9_]+)=(remote\.[a-z0-9_]+)$/;
+
+/** media player entity -> remote entity. `null` when any pair is malformed. */
+export function parseDeviceLinks(raw: string): Record<string, string> | null {
+  const links: Record<string, string> = {};
+  for (const part of raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)) {
+    const match = LINK.exec(part);
+    if (!match) return null;
+    links[match[1] as string] = match[2] as string;
+  }
+  return links;
+}
+
 const schema = z
   .object({
     API_HOST: z.string().trim().min(1).default('0.0.0.0'),
@@ -45,6 +97,10 @@ const schema = z
           value === undefined ? undefined : value === 'true' || value === '1',
         ),
     ),
+    // JSON object {"App name": "app id"}: Samsung app ids depend on model and region.
+    TV_APPS: optionalString,
+    // Comma-separated "media_player.x=remote.y" pairs: which remote drives which media player.
+    DEVICE_LINKS: optionalString,
     SPOTIFY_CLIENT_ID: optionalString,
     SPOTIFY_REDIRECT_URI: optionalString,
     APP_SECRET_KEY: optionalString,
@@ -64,6 +120,22 @@ const schema = z
       .default(300_000),
   })
   .superRefine((env, ctx) => {
+    if (env.TV_APPS && parseTvApps(env.TV_APPS) === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TV_APPS'],
+        message:
+          'must be a JSON object of app name to app id, e.g. {"Netflix":"3201907018807"} (names up to 40 chars, ids of letters, digits, dots, _ or -)',
+      });
+    }
+    if (env.DEVICE_LINKS && parseDeviceLinks(env.DEVICE_LINKS) === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DEVICE_LINKS'],
+        message:
+          'must be comma-separated "media_player.<id>=remote.<id>" pairs (lowercase letters, digits and _)',
+      });
+    }
     if (env.SPOTIFY_CLIENT_ID && !env.SPOTIFY_REDIRECT_URI) {
       ctx.addIssue({
         code: 'custom',
@@ -141,6 +213,10 @@ export interface AppConfig {
   /** Base64 key for encrypting tokens at rest; when unset a key file is created in the data directory. */
   appSecretKey: string | undefined;
   homeAssistant: { url: string; token: string; timeoutMs: number } | null;
+  /** App name -> app id the TV can launch. */
+  tvApps: Record<string, string>;
+  /** Explicit media player -> remote pairs, for integrations Home Assistant does not group by itself. */
+  deviceLinks: Record<string, string>;
 }
 
 export class ConfigError extends Error {
@@ -190,6 +266,8 @@ export function loadConfig(
         ? { clientId: parsed.SPOTIFY_CLIENT_ID, redirectUri: parsed.SPOTIFY_REDIRECT_URI }
         : null,
     appSecretKey: parsed.APP_SECRET_KEY,
+    tvApps: (parsed.TV_APPS && parseTvApps(parsed.TV_APPS)) || { ...DEFAULT_TV_APPS },
+    deviceLinks: (parsed.DEVICE_LINKS && parseDeviceLinks(parsed.DEVICE_LINKS)) || {},
     authEnabled: parsed.AUTH_ENABLED,
     authCookieSecure:
       parsed.AUTH_COOKIE_SECURE === 'auto' ? 'auto' : parsed.AUTH_COOKIE_SECURE === 'true',

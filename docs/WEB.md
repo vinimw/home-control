@@ -144,6 +144,13 @@ from the server's view returned in the action result), never because it was clic
 States covered: loading, API unreachable, Home Assistant not connected, no devices, no match for the filters,
 and per device: available / unavailable (controls hidden or disabled) / no reading.
 
+## TV remote (`/devices/<id>`)
+
+Opened from the **Abrir controle remoto** link on a TV card that offers `press_key` or `launch_app`. It renders
+only what `device.commands` lists (keys, apps, inputs, volume...), with one shared status line that says
+"confirmado" only when the API did. Buttons are at least 44px, the d-pad is a 3x3 grid, and the header back
+control leads to Dispositivos. Unavailable TVs get disabled controls and an explanation.
+
 ## Adding a component
 
 1. Put primitives in `components/ui` using `cva` + `cn`; keep 44 px touch targets on interactive elements.

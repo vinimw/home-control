@@ -28,16 +28,16 @@ Commands come from what the entity advertises, never from the device model. Exam
 without Wake-on-LAN exposes `turn_off` but **not** `turn_on`, so the UI will not offer a button that
 cannot work.
 
-| Domain                      | Derived from                                                                                                       |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `light`                     | `supported_color_modes` -> brightness, color temperature (kelvin range), color                                     |
-| `switch`, `input_boolean`   | always `turn_on` / `turn_off`                                                                                      |
-| `media_player`              | `supported_features` bits -> power, playback, track skip, volume, mute, source (with the `source_list` as options) |
-| `climate`                   | `supported_features`, `hvac_modes`, `min_temp` / `max_temp`                                                        |
-| `cover`                     | open, close, stop, set position                                                                                    |
-| `fan`                       | on / off, plus speed when supported                                                                                |
-| `scene`, `script`, `button` | `activate`                                                                                                         |
-| `sensor`, `binary_sensor`   | read-only (`reading`), no commands                                                                                 |
+| Domain                      | Derived from                                                                                                                                                                                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `light`                     | `supported_color_modes` -> brightness, color temperature (kelvin range), color                                                                                                                                                                                                                                 |
+| `switch`, `input_boolean`   | always `turn_on` / `turn_off`                                                                                                                                                                                                                                                                                  |
+| `media_player`              | `supported_features` bits -> power, playback, track skip, volume, mute, source (with the `source_list` as options). Plus `press_key` (keys `up/down/left/right/ok/home/back`) when a `remote` entity is associated, and `launch_app` for configured apps the player lists (see [SAMSUNG_TV.md](SAMSUNG_TV.md)) |
+| `climate`                   | `supported_features`, `hvac_modes`, `min_temp` / `max_temp`                                                                                                                                                                                                                                                    |
+| `cover`                     | open, close, stop, set position                                                                                                                                                                                                                                                                                |
+| `fan`                       | on / off, plus speed when supported                                                                                                                                                                                                                                                                            |
+| `scene`, `script`, `button` | `activate`                                                                                                                                                                                                                                                                                                     |
+| `sensor`, `binary_sensor`   | read-only (`reading`), no commands                                                                                                                                                                                                                                                                             |
 
 `media_player` with `device_class: tv` becomes `tv`; `speaker` / `receiver` become `speaker`; anything
 else stays `media_player`.

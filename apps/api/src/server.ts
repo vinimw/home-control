@@ -37,6 +37,10 @@ export interface ServerOptions {
   logLevel?: string;
   homeAssistant?: HomeAssistantSettings | null;
   deviceRefreshIntervalMs?: number;
+  /** Launchable TV applications (name -> id). */
+  tvApps?: Record<string, string>;
+  /** Explicit media player -> remote entity pairs. */
+  deviceLinks?: Record<string, string>;
   /** Spotify app settings (`null`/absent: not configured). `endpoints` is only overridden by tests. */
   spotify?: SpotifySettings & { endpoints?: SpotifyEndpoints };
   /** Key for encrypting stored tokens. A random one per process when absent (tests). */
@@ -96,12 +100,15 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       absoluteTtlMs: options.auth?.absoluteTtlMs,
     }),
   );
+  const tvApps = new Map(Object.entries(options.tvApps ?? {}));
   app.decorate(
     'devices',
     new DeviceRegistry({
       service: app.homeAssistant,
       logger: app.log,
       refreshIntervalMs: options.deviceRefreshIntervalMs ?? 300_000,
+      links: options.deviceLinks,
+      apps: tvApps,
     }),
   );
   app.decorate('catalog', new DeviceCatalog(app.devices, app.storage));
@@ -115,6 +122,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       homeAssistant: app.homeAssistant,
       logger: app.log,
       view: (id) => app.catalog.get(id),
+      apps: tvApps,
       enabled: options.deviceActions?.enabled ?? false,
       confirmTimeoutMs: options.deviceActions?.confirmTimeoutMs,
     }),
