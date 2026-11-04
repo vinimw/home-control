@@ -14,6 +14,7 @@ import { registerAlexaRoutes } from './routes/alexa.js';
 import { registerCustomDeviceRoutes } from './routes/custom-devices.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerDeviceRoutes } from './routes/devices.js';
+import { registerDeviceLayoutRoutes } from './routes/device-layout.js';
 import { registerRoomRoutes } from './routes/rooms.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSpotifyRoutes } from './routes/spotify.js';
@@ -191,6 +192,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerAuthRoutes(app, { secure: options.auth?.cookieSecure ?? 'auto' });
   registerHomeAssistantRoutes(app);
   registerDeviceRoutes(app);
+  registerDeviceLayoutRoutes(app);
   registerRoomRoutes(app);
   registerSettingsRoutes(app);
   registerSpotifyRoutes(app);

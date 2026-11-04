@@ -1,4 +1,6 @@
 import {
+  API_DEVICE_LAYOUT_PATH,
+  type DeviceLayout,
   API_ALEXA_COMMANDS_PATH,
   API_CUSTOM_DEVICES_PATH,
   API_ROOMS_PATH,
@@ -69,4 +71,8 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     getJson<HomeAssistantStatusResponse>(API_HA_STATUS_PATH),
   ]);
   return { api, homeAssistant };
+}
+
+export function getDeviceLayout(): Promise<DeviceLayout | null> {
+  return getJson<DeviceLayout>(API_DEVICE_LAYOUT_PATH);
 }

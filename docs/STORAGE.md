@@ -94,3 +94,17 @@ docker compose up -d
 - Single API process (SQLite file, synchronous access).
 - Every endpoint, including the write ones, needs a login (see [SECURITY.md](SECURITY.md)).
 - Only the metadata above is persisted; command history is a later task.
+
+## Device card layout (#54)
+
+Migration 6 adds the single-row `device_layout` table. It stores only `revision` and a JSON array of stable
+`dev_…`/`cd_…` ids, with no device state, credentials or room assignment. It survives API/container restarts
+through the existing SQLite file and Compose data volume. Missing ids are deliberately retained; there are
+no foreign keys to the discovery registry or custom cards.
+
+Authenticated `GET /device-layout` returns `{ revision, cardIds }`; `PATCH /device-layout` accepts the same
+shape, requires the existing CSRF token and returns the updated layout. The payload is strict: nonnegative
+safe integer revision, at most 500 unique ids matching the stable id formats. A transaction updates only
+when the supplied revision matches, increments it and returns the new snapshot. A mismatch returns `409
+conflict`, requiring a fresh read before retrying; concurrent requests never silently overwrite one another.
+The ordering endpoint never invokes a device command.
