@@ -91,6 +91,9 @@ Events stream relayed by the web app (the browser never talks to the API directl
 Tracked in the GitHub Project "Home Control" (Foundation, Home Assistant, Samsung, Echo Show,
 Spotify, Scenes, Security/PWA, Deployment).
 
+Post-MVP investigations (desk research, nothing built): [YORK_AC.md](YORK_AC.md), the York air
+conditioner over infrared.
+
 ## Tooling decisions
 
 - pnpm workspaces, Node >= 22, TypeScript strict (`tsconfig.base.json`).
