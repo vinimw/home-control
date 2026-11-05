@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AppHeader } from './app-header';
 import { BottomNav } from './bottom-nav';
+import { OfflineBanner } from './offline-banner';
 import { Sidebar } from './sidebar';
 
 /**
@@ -19,6 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="md:pl-60">
         <AppHeader />
+        <OfflineBanner />
         <main
           id="conteudo"
           tabIndex={-1}

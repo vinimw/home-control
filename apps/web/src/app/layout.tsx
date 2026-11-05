@@ -6,6 +6,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: { default: 'Home Control', template: '%s · Home Control' },
   description: 'Controle local da sua casa: TV, Echo Show e música.',
+  applicationName: 'Home Control',
+  // iPhone: "Adicionar à Tela de Início" opens the app full screen, under the status bar.
+  appleWebApp: { capable: true, title: 'Home Control', statusBarStyle: 'black-translucent' },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
