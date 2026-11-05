@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, House } from 'lucide-react';
 import { LogoutButton } from '@/components/auth/logout-button';
+import { MediaWidget } from '@/components/media/media-widget';
 import { parentOf } from './nav-items';
 import { ThemeToggle } from './theme-toggle';
 
@@ -36,7 +37,8 @@ export function AppHeader() {
             <span className="truncate">Home Control</span>
           </span>
         )}
-        <div className="flex shrink-0 items-center">
+        <div className="flex min-w-0 shrink items-center">
+          <MediaWidget />
           <ThemeToggle />
           <LogoutButton />
         </div>
