@@ -23,7 +23,11 @@ export const CONTROL_NOTICE: Record<SpotifyControlResult['status'], string> = {
  * 60 s) after other failures. A command result replaces the state, so no extra read is needed.
  */
 export function useSpotifyControl() {
-  const [state, setState] = useState<SpotifyResult<SpotifyControlState> | null>(null);
+  // The last good state is kept when a refresh fails, so the player never blanks out: it is shown as stale.
+  const [data, setData] = useState<SpotifyControlState | null>(null);
+  const [receivedAt, setReceivedAt] = useState<number | null>(null);
+  const [error, setError] = useState<Extract<SpotifyResult<unknown>, { ok: false }> | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
@@ -36,11 +40,17 @@ export function useSpotifyControl() {
     if (Date.now() < blockedUntil.current) return;
     const result = await spotifyRequest<SpotifyControlState>('control/state');
     if (stopped.current) return;
-    setState(result);
+    setLoaded(true);
     if (result.ok) {
+      setData(result.data);
+      setReceivedAt(Date.now());
+      setError(null);
       delay.current = BASE_MS;
       setWaitSeconds(null);
-    } else if (result.code === 'too_many_requests') {
+      return;
+    }
+    setError(result);
+    if (result.code === 'too_many_requests') {
       const seconds = Math.max(result.retryAfter ?? 10, 5);
       delay.current = Math.min(Math.max(seconds * 1000, delay.current), MAX_MS);
       blockedUntil.current = Date.now() + seconds * 1000;
@@ -78,7 +88,9 @@ export function useSpotifyControl() {
       setNotice(null);
       const result = await spotifyRequest<SpotifyControlResult>(path, 'POST', body);
       if (result.ok) {
-        setState({ ok: true, data: result.data.state });
+        setData(result.data.state);
+        setReceivedAt(Date.now());
+        setError(null);
         setNotice(CONTROL_NOTICE[result.data.status]);
       } else {
         setNotice(
@@ -98,13 +110,19 @@ export function useSpotifyControl() {
   );
 
   return {
-    state,
+    data,
+    receivedAt,
+    error,
+    loaded,
+    /** The last refresh failed, so `data` may be out of date. */
+    stale: error !== null && data !== null,
     busy,
     notice,
     waitSeconds,
     reload: read,
     command: (command: SpotifyControlCommand, deviceId?: string) =>
       run('control/command', { command, ...(deviceId ? { deviceId } : {}) }),
+    seek: (positionMs: number) => run('control/seek', { positionMs }),
     transfer: (deviceId: string, play = true) => run('control/transfer', { deviceId, play }),
     playTrack: (trackId: string, contextUri?: string, deviceId?: string) =>
       run('control/track', {

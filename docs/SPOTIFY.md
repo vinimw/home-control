@@ -63,6 +63,36 @@ reading; **Ajustes > Spotify > Testar conexão** lists the missing permission an
 - **No duplicate polling and no Alexa fallback.** The page uses one path at a time (direct or Home
   Assistant); nothing sends voice commands or retries by waking an Echo.
 
+### The Music page layout
+
+The direct player is one recognizable unit (**Tocando agora**): album artwork (or a neutral placeholder),
+status (_Tocando_, _Pausado_, _Sem saída ativa_, _Nenhuma saída disponível_, _Sem informações da faixa_,
+_Somente leitura_), title, artist and album, a progress bar with elapsed and total time, previous / a large
+play-pause / next, and the **active output** with a "Trocar saída" button that opens the list of outputs
+(transfer, restricted ones disabled) only when needed.
+
+- **Compact player.** When the main controls scroll out of view the page shows a thin player (artwork,
+  track, previous / play-pause / next, progress line) fixed above the bottom navigation on phones (and at
+  the bottom of the content area from `md` up), so controls stay reachable while browsing search results,
+  saved tracks or a playlist. It never covers the navigation, and the page keeps extra space under the last
+  item. Tapping its title scrolls back to the main player.
+- **Progress without extra requests.** The position is interpolated locally once a second while playing and
+  the tab is visible, and re-based on every state Spotify returns (same 5 s refresh as before). It freezes
+  when paused, stops at the end of the track and, if a refresh failed, stops advancing after 10 s and the
+  page says the data may be out of date; the last good state stays on screen instead of blanking.
+- **Seeking** uses `PUT /me/player/seek` (`POST /spotify/control/seek { positionMs }`) and is enabled only
+  when an output is active and Spotify does not list `seeking` under `actions.disallows`; otherwise the bar
+  is read-only and says so. The result is `confirmed` only if the position was observed afterwards.
+- **Connection details moved down.** The "controlling directly via Spotify / Home Assistant" line, the
+  switch and "Configurar conexão" are in a footer. Banners that need action (missing control permission,
+  Premium required, reconnect) stay at the top.
+- **Header vs Music page.** The header widget reads Home Assistant's Spotify/Echo media players (a poll every
+  few seconds, and an Echo that is not the active output may keep showing its last track as paused), while
+  the Music page reads the Spotify account itself, which only knows the **active** output. They can differ
+  for a few moments or when an Echo/TV reports stale metadata. The header panel now says its state comes
+  from Home Assistant and links to Música; consolidating both on one source would need an extra request
+  path and was left out.
+
 ### Default path
 
 The Music page uses the direct path when the account is connected **with** the control permission, and shows

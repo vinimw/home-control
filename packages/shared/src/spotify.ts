@@ -137,7 +137,14 @@ export interface SpotifyPlayback {
   /** Actions Spotify says are not allowed right now (`pausing`, `resuming`, `skipping_next`...). */
   disallowed: string[];
   device: SpotifyDevice | null;
-  track: { name: string; artists: string[]; album: string | null; durationMs: number } | null;
+  track: {
+    name: string;
+    artists: string[];
+    album: string | null;
+    durationMs: number;
+    /** Album artwork (a mid-size image), when Spotify provides one. */
+    imageUrl: string | null;
+  } | null;
   progressMs: number | null;
 }
 
@@ -258,4 +265,9 @@ export interface SpotifyPlayTrackInput {
   /** Play inside this playlist (`spotify:playlist:<id>`) so playback continues with its next tracks. */
   contextUri?: string;
   deviceId?: string;
+}
+
+/** `POST /spotify/control/seek` */
+export interface SpotifySeekInput {
+  positionMs: number;
 }

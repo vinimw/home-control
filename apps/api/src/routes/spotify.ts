@@ -62,6 +62,7 @@ const searchQuery = z
       .default(SPOTIFY_SEARCH_PAGE_MAX),
   })
   .strict();
+const seekBody = z.object({ positionMs: z.number().int().min(0).max(86_400_000) }).strict();
 const trackBody = z
   .object({
     trackId: spotifyId,
@@ -200,6 +201,9 @@ export function registerSpotifyRoutes(app: FastifyInstance): void {
       const { deviceId: target, play } = parseBody(transferBody, request.body);
       return app.spotify.transfer(target, play);
     },
+  );
+  app.post<{ Reply: SpotifyControlResult }>(`${API_SPOTIFY_CONTROL_PATH}/seek`, async (request) =>
+    app.spotify.seek(parseBody(seekBody, request.body).positionMs),
   );
   app.post<{ Reply: SpotifyControlResult }>(
     `${API_SPOTIFY_CONTROL_PATH}/track`,
