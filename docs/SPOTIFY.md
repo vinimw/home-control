@@ -43,6 +43,13 @@ automatically). Commands target that one entity; the browser never chooses an en
   idle. It performs no playback calls. Playing a playlist goes through Home Assistant `play_media`
   (`spotify:playlist:<id>`), which also requires an active output.
 
+**Player page (`/music`, "Música" in the navigation).** Now playing, previous/play-pause/next, the list of
+available outputs and the playlists with a "Tocar" button. Every control is enabled only when the
+capabilities above allow it, and each part has its own loading, empty and error state. The page refreshes
+`GET /spotify/player` every 5 seconds while visible; that reads one Home Assistant entity and never calls
+Spotify, so there is no duplicate Spotify polling. Ajustes > Spotify keeps only the account connection and
+links to the player. The direct connection (#17) is retained solely to list playlists.
+
 **Validation status.** Verified against the real Home Assistant (read-only): entity discovery, outputs
 (`MacBook Pro de Vinicius`, `Todo lugar`, `echo show`), idle capabilities, and honest refusals of
 next/playlist/unknown output. **Not yet verified:** real play, pause, skip, output selection and playlist

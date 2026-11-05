@@ -4,9 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, LoaderCircle, Music2, RefreshCw } from 'lucide-react';
 import type {
   SpotifyConnectResponse,
-  SpotifyPlayerCommand,
-  SpotifyPlayerResult,
-  SpotifyPlayerState,
   SpotifyDevicesResponse,
   SpotifyPlaybackResponse,
   SpotifyPlaylistsResponse,
@@ -14,9 +11,9 @@ import type {
 } from '@home-control/shared';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { PLAYER_NOTICE, SpotifyPlayer } from './spotify-player';
 import { spotifyRequest, type SpotifyResult } from '@/lib/spotify-client';
 
 type Outcome = 'connected' | 'denied' | 'error' | undefined;
@@ -50,30 +47,7 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [player, setPlayer] = useState<SpotifyResult<SpotifyPlayerState> | null>(null);
-  const [playerBusy, setPlayerBusy] = useState(false);
-  const [playerNotice, setPlayerNotice] = useState<string | null>(null);
-
-  const loadPlayer = useCallback(async () => {
-    setPlayer(await spotifyRequest<SpotifyPlayerState>('player'));
-  }, []);
-
-  async function playerAction(path: string, body: unknown) {
-    setPlayerBusy(true);
-    setPlayerNotice(null);
-    const result = await spotifyRequest<SpotifyPlayerResult>(path, 'POST', body);
-    if (result.ok) {
-      setPlayer({ ok: true, data: result.data.player });
-      setPlayerNotice(PLAYER_NOTICE[result.data.status]);
-    } else {
-      setPlayerNotice(result.message);
-      await loadPlayer();
-    }
-    setPlayerBusy(false);
-  }
-
   const load = useCallback(async () => {
-    void loadPlayer();
     const result = await spotifyRequest<SpotifyStatus>('status');
     setStatus(result);
     if (result.ok && result.data.connected) {
@@ -92,7 +66,7 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
     } else {
       setData(null);
     }
-  }, [loadPlayer]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -131,20 +105,6 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
         </Alert>
       ) : null}
       {error ? <ErrorLine message={error} /> : null}
-
-      {player?.ok ? (
-        <SpotifyPlayer
-          player={player.data}
-          busy={playerBusy}
-          notice={playerNotice}
-          onCommand={(command: SpotifyPlayerCommand) =>
-            void playerAction('player/command', { command })
-          }
-          onSource={(source) => void playerAction('player/source', { source })}
-        />
-      ) : player ? (
-        <ErrorLine message={player.message} />
-      ) : null}
 
       {status === null ? (
         <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -274,18 +234,6 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
                           {playlist.owner ? ` · ${playlist.owner}` : ''}
                         </p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={
-                          playerBusy || !(player?.ok && player.data.capabilities.playPlaylist)
-                        }
-                        onClick={() =>
-                          void playerAction('player/playlist', { playlistId: playlist.id })
-                        }
-                      >
-                        Tocar
-                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -299,6 +247,9 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
           </section>
 
           <div className="flex flex-wrap gap-2">
+            <Link href="/music" className={buttonVariants({ variant: 'outline' })}>
+              Abrir o player
+            </Link>
             <Button variant="outline" onClick={() => void load()}>
               <RefreshCw aria-hidden />
               Atualizar
