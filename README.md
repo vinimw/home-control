@@ -37,6 +37,7 @@ Full guide, configuration reference and troubleshooting: [docs/DEVELOPMENT.md](d
 **Login.** On the first run the API prints a one-time setup code in its log; open the web app, enter it and
 create your password. Forgot it, how sessions work and what is (not) protected:
 [docs/SECURITY.md](docs/SECURITY.md). Never forward the ports on your router.
+Running it always-on on a Mac (boot to ready, backups, recovery): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Configuration
 
