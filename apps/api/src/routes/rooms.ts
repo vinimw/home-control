@@ -21,6 +21,8 @@ const updateBody = z
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: 'provide at least one field' });
 
+const orderBody = z.object({ ids: z.array(z.string().regex(ROOM_ID)).max(MAX_ROOMS) }).strict();
+
 export function registerRoomRoutes(app: FastifyInstance): void {
   const { rooms } = app.storage;
   const notFound = () => new ApiError('not_found', 'Room not found');
@@ -38,6 +40,14 @@ export function registerRoomRoutes(app: FastifyInstance): void {
       if (error instanceof DuplicateRoomError) throw new ApiError('conflict', error.message);
       throw error;
     }
+  });
+
+  /** Saves the room order. Rooms not listed keep their relative order after the listed ones. */
+  app.put<{ Reply: RoomListResponse }>(`${API_ROOMS_PATH}/order`, async (request) => {
+    const { ids } = parseOrThrow(orderBody, request.body, 'body');
+    const result = rooms.reorder(ids);
+    app.deviceEvents.resync('rooms');
+    return { rooms: result };
   });
 
   app.patch<{ Params: { id: string }; Reply: Room }>(`${API_ROOMS_PATH}/:id`, async (request) => {

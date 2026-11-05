@@ -9,7 +9,7 @@ import {
   type CustomDeviceInput,
   type Room,
 } from '@home-control/shared';
-import type { Database } from './database.js';
+import { inTransaction, type Database } from './database.js';
 import {
   DuplicateRoomError,
   type AlexaCommandRepository,
@@ -72,6 +72,20 @@ export class SqliteRoomRepository implements RoomRepository {
       throw error;
     }
     return this.get(id)!;
+  }
+
+  reorder(ids: string[]): Room[] {
+    return inTransaction(this.db, () => {
+      const current = this.list();
+      const known = new Set(current.map((room) => room.id));
+      const first = [...new Set(ids)].filter((id) => known.has(id));
+      const rest = current.map((room) => room.id).filter((id) => !first.includes(id));
+      const update = this.db.prepare(
+        'UPDATE rooms SET sort_order = ?, updated_at = ? WHERE id = ?',
+      );
+      [...first, ...rest].forEach((id, index) => update.run(index + 1, now(), id));
+      return this.list();
+    });
   }
 
   update(id: string, change: { name?: string; sortOrder?: number }): Room | undefined {

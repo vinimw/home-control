@@ -80,7 +80,7 @@ export function crossSiteRejection(request: Request): Response | null {
 export async function relayJson(
   request: Request,
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
 ): Promise<Response> {
   let body: string | undefined;
   if (method !== 'GET') {

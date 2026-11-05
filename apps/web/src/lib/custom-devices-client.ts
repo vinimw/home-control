@@ -37,7 +37,7 @@ export const describeCustomError = (code: ApiErrorCode | null | undefined): stri
 
 async function request<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): Promise<CustomResult<T>> {
   let response: Response;
@@ -79,4 +79,6 @@ export const executeCustomDevice = (id: string, action: CustomDeviceAction) =>
   request<CustomDeviceExecutionResult>(`/api/custom-devices/${id}/execute`, 'POST', { action });
 
 export const listRooms = () => request<RoomListResponse>('/api/rooms', 'GET');
+export const saveRoomOrder = (ids: string[]) =>
+  request<RoomListResponse>('/api/rooms/order', 'PUT', { ids });
 export const createRoom = (name: string) => request<Room>('/api/rooms', 'POST', { name });

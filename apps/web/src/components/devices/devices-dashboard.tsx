@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CircleAlert, LayoutGrid, Lightbulb, RefreshCw, SearchX, WifiOff } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  LayoutGrid,
+  Lightbulb,
+  RefreshCw,
+  SearchX,
+  WifiOff,
+} from 'lucide-react';
 import type {
   CustomDevice,
   CustomDeviceListResponse,
@@ -21,6 +32,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   createRoom,
   listRooms,
+  saveRoomOrder,
   listCustomDevices,
   updateCustomDevice,
 } from '@/lib/custom-devices-client';
@@ -47,8 +59,21 @@ type Filter = 'all' | 'favorites' | CategoryId;
 
 const timeFormat = new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium' });
 
+const roomKey = (name: string) => name.trim().toLocaleLowerCase('pt-BR');
+
+/** Rooms in the user's saved order first, then the others alphabetically; "no room" is always last. */
+function compareRooms(rank: (name: string) => number) {
+  return (a: string, b: string): number =>
+    a === NO_ROOM_LABEL
+      ? 1
+      : b === NO_ROOM_LABEL
+        ? -1
+        : rank(a) - rank(b) || a.localeCompare(b, 'pt-BR');
+}
+
 function groupByRoom<T extends { name: string; room: { name: string } | null }>(
   items: T[],
+  rank: (name: string) => number,
 ): Array<{ room: string; items: T[] }> {
   const groups = new Map<string, T[]>();
   for (const item of items) {
@@ -56,9 +81,7 @@ function groupByRoom<T extends { name: string; room: { name: string } | null }>(
     groups.set(key, [...(groups.get(key) ?? []), item]);
   }
   return [...groups.entries()]
-    .sort(([a], [b]) =>
-      a === NO_ROOM_LABEL ? 1 : b === NO_ROOM_LABEL ? -1 : a.localeCompare(b, 'pt-BR'),
-    )
+    .sort(([a], [b]) => compareRooms(rank)(a, b))
     .map(([room, list]) => ({
       room,
       items: list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
@@ -92,6 +115,46 @@ export function DevicesDashboard({
   const [roomError, setRoomError] = useState<string | null>(null);
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [dropRoom, setDropRoom] = useState<string | null>(null);
+  // Collapsed rooms are remembered on this device (not in the server): each device keeps its own view.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('collapsed-rooms') ?? '[]') as unknown;
+      if (Array.isArray(saved)) setCollapsed(new Set(saved.filter((v) => typeof v === 'string')));
+    } catch {
+      /* storage unavailable: every room starts open */
+    }
+  }, []);
+  const toggleCollapsed = (name: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      const key = roomKey(name);
+      if (!next.delete(key)) next.add(key);
+      try {
+        localStorage.setItem('collapsed-rooms', JSON.stringify([...next]));
+      } catch {
+        /* the choice still applies until the page is closed */
+      }
+      return next;
+    });
+  const [orderBusy, setOrderBusy] = useState(false);
+  async function moveRoom(name: string, by: -1 | 1) {
+    const ordered = [...savedRooms].sort((a, b) => a.sortOrder - b.sortOrder);
+    const index = ordered.findIndex((room) => roomKey(room.name) === roomKey(name));
+    const target = index + by;
+    if (index < 0 || target < 0 || target >= ordered.length) return;
+    const ids = ordered.map((room) => room.id);
+    [ids[index], ids[target]] = [ids[target]!, ids[index]!];
+    setOrderBusy(true);
+    const result = await saveRoomOrder(ids);
+    setOrderBusy(false);
+    if (result.ok) {
+      setSavedRooms(result.data.rooms);
+      setMoveNotice(`${name}: ${by < 0 ? 'subiu' : 'desceu'} para a posição ${target + 1}.`);
+    } else {
+      setRoomError('Não foi possível salvar a nova ordem dos cômodos. Tente de novo.');
+    }
+  }
   useEffect(() => {
     if (initialRooms === null)
       void listRooms().then((result) => {
@@ -237,18 +300,18 @@ export function DevicesDashboard({
     }
   }
   const ranks = new Map(fullOrder.map((id, index) => [id, index]));
-  const roomGroups = groupByRoom(visible);
+  const savedRank = new Map(
+    [...savedRooms]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((room, index) => [roomKey(room.name), index] as const),
+  );
+  const rankOf = (name: string) => savedRank.get(roomKey(name)) ?? Number.MAX_SAFE_INTEGER;
+  const roomGroups = groupByRoom(visible, rankOf);
   if (editing) {
     for (const [name] of rooms)
       if (!roomGroups.some((group) => group.room === name))
         roomGroups.push({ room: name, items: [] });
-    roomGroups.sort((a, b) =>
-      a.room === NO_ROOM_LABEL
-        ? 1
-        : b.room === NO_ROOM_LABEL
-          ? -1
-          : a.room.localeCompare(b.room, 'pt-BR'),
-    );
+    roomGroups.sort((a, b) => compareRooms(rankOf)(a.room, b.room));
   }
   const groups = roomGroups.map((group) => ({
     ...group,
@@ -587,6 +650,16 @@ export function DevicesDashboard({
               const readOnly = group.items.flatMap((entry) =>
                 entry.kind === 'device' && !isControllable(entry.device) ? [entry.device] : [],
               );
+              // While organizing, every room stays open so cards can be dropped into it.
+              const isOpen = editing || !collapsed.has(roomKey(group.room));
+              const bodyId = `room-${roomKey(group.room).replace(/[^a-z0-9]+/g, '-')}`;
+              const savedOrder = [...savedRooms].sort((a, b) => a.sortOrder - b.sortOrder);
+              const savedIndex = savedOrder.findIndex(
+                (room) => roomKey(room.name) === roomKey(group.room),
+              );
+              const canReorder = savedIndex >= 0;
+              const isFirst = savedIndex === 0;
+              const isLast = savedIndex === savedOrder.length - 1;
               return (
                 <section
                   key={group.room}
@@ -598,64 +671,106 @@ export function DevicesDashboard({
                     dropRoom === group.room && 'ring-2 ring-primary',
                   )}
                 >
-                  <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                    {group.room}
-                  </h2>
-                  {cards.length > 0 ? (
-                    <OrderingGrid
-                      editing={editing}
-                      disabled={movingDisabled}
-                      room={group.room}
-                      rooms={rooms.map(([name]) => name)}
-                      onRoomDrop={moveToRoom}
-                      onDragTarget={setDropRoom}
-                      items={cards.map((entry) => ({
-                        id: entryId(entry),
-                        name: entry.name,
-                        content:
-                          entry.kind === 'device' ? (
-                            <DeviceTile
-                              device={entry.device}
-                              onCommand={onCommand}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-expanded={isOpen}
+                      aria-controls={bodyId}
+                      onClick={() => toggleCollapsed(group.room)}
+                      className="flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      {isOpen ? (
+                        <ChevronDown aria-hidden className="size-4 shrink-0" />
+                      ) : (
+                        <ChevronRight aria-hidden className="size-4 shrink-0" />
+                      )}
+                      <h2 className="truncate">{group.room}</h2>
+                      {!isOpen ? (
+                        <span className="font-normal normal-case">
+                          ({group.items.length} {group.items.length === 1 ? 'item' : 'itens'})
+                        </span>
+                      ) : null}
+                    </button>
+                    {editing && canReorder ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Subir o cômodo ${group.room}`}
+                          disabled={orderBusy || isFirst}
+                          onClick={() => void moveRoom(group.room, -1)}
+                        >
+                          <ArrowUp aria-hidden />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Descer o cômodo ${group.room}`}
+                          disabled={orderBusy || isLast}
+                          onClick={() => void moveRoom(group.room, 1)}
+                        >
+                          <ArrowDown aria-hidden />
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                  <div id={bodyId} hidden={!isOpen} className="flex min-w-0 flex-col gap-2">
+                    {cards.length > 0 ? (
+                      <OrderingGrid
+                        editing={editing}
+                        disabled={movingDisabled}
+                        room={group.room}
+                        rooms={rooms.map(([name]) => name)}
+                        onRoomDrop={moveToRoom}
+                        onDragTarget={setDropRoom}
+                        items={cards.map((entry) => ({
+                          id: entryId(entry),
+                          name: entry.name,
+                          content:
+                            entry.kind === 'device' ? (
+                              <DeviceTile
+                                device={entry.device}
+                                onCommand={onCommand}
+                                onToggleFavorite={onToggleFavorite}
+                              />
+                            ) : (
+                              <CustomDeviceTile
+                                device={entry.custom}
+                                onChange={applyCustom}
+                                onToggleFavorite={onToggleCustomFavorite}
+                              />
+                            ),
+                        }))}
+                        onMove={(source, target) => {
+                          const ids = cards.map(entryId);
+                          const updated = moveVisibleCard(fullOrder, ids, source, target);
+                          if (updated === fullOrder) return;
+                          setMoveNotice(
+                            `${cards.find((entry) => entryId(entry) === source)?.name}: posição ${ids.indexOf(target) + 1} de ${ids.length}.`,
+                          );
+                          void ordering.save(updated);
+                        }}
+                      />
+                    ) : null}
+                    {editing && cards.length === 0 ? (
+                      <p className="flex min-h-24 items-center justify-center rounded-md bg-muted/40 p-3 text-center text-sm text-muted-foreground">
+                        Solte um cartão aqui para movê-lo para {group.room}.
+                      </p>
+                    ) : null}
+                    {readOnly.length > 0 ? (
+                      <Card>
+                        <ul className="divide-y">
+                          {readOnly.map((device) => (
+                            <DeviceRow
+                              key={device.id}
+                              device={device}
                               onToggleFavorite={onToggleFavorite}
                             />
-                          ) : (
-                            <CustomDeviceTile
-                              device={entry.custom}
-                              onChange={applyCustom}
-                              onToggleFavorite={onToggleCustomFavorite}
-                            />
-                          ),
-                      }))}
-                      onMove={(source, target) => {
-                        const ids = cards.map(entryId);
-                        const updated = moveVisibleCard(fullOrder, ids, source, target);
-                        if (updated === fullOrder) return;
-                        setMoveNotice(
-                          `${cards.find((entry) => entryId(entry) === source)?.name}: posição ${ids.indexOf(target) + 1} de ${ids.length}.`,
-                        );
-                        void ordering.save(updated);
-                      }}
-                    />
-                  ) : null}
-                  {editing && cards.length === 0 ? (
-                    <p className="flex min-h-24 items-center justify-center rounded-md bg-muted/40 p-3 text-center text-sm text-muted-foreground">
-                      Solte um cartão aqui para movê-lo para {group.room}.
-                    </p>
-                  ) : null}
-                  {readOnly.length > 0 ? (
-                    <Card>
-                      <ul className="divide-y">
-                        {readOnly.map((device) => (
-                          <DeviceRow
-                            key={device.id}
-                            device={device}
-                            onToggleFavorite={onToggleFavorite}
-                          />
-                        ))}
-                      </ul>
-                    </Card>
-                  ) : null}
+                          ))}
+                        </ul>
+                      </Card>
+                    ) : null}
+                  </div>
                 </section>
               );
             })
