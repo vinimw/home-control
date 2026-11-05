@@ -19,8 +19,9 @@ A compact control in the header shows what is playing on the **Echo (Alexa)**, t
 
 ### Which source is on top
 
-Automatic rule: the **most recently changed playing** source; otherwise the most recent paused one;
-otherwise a TV that is on. You can pick **Mostrar no topo** for another source (kept for the browser
+Automatic rule: the **most recently changed source in use**, where "in use" is a source that is playing
+**or a TV that is on** (a TV being watched is shown even when music is merely paused); otherwise the most
+recent paused one. You can pick **Mostrar no topo** for another source (kept for the browser
 session). The other sources always stay reachable in the panel, so using the Echo and the TV together never
 hides one of them. Echo and Spotify often show the same track (the Echo is the Spotify output).
 

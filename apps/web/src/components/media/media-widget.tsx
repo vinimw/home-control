@@ -20,17 +20,21 @@ const STATE_LABEL: Record<MediaPlaybackState, string> = {
   unknown: 'Estado desconhecido',
 };
 
-/** Which source the header highlights: manual choice, else a playing one (most recent), else a paused one. */
+/** A source in use: it is playing, or it is a TV that is on (watching TV is not "paused music"). */
+const inUse = (s: MediaSource): boolean =>
+  s.state === 'playing' || (s.kind === 'tv' && s.state === 'on');
+
+/**
+ * Which source the header highlights: a manual choice, else the most recently changed source in use
+ * (playing, or a TV that is on), else the most recent paused one. Paused music never hides an active TV.
+ */
 export function pickPrimary(sources: MediaSource[], manualId: string | null): MediaSource | null {
   const manual = sources.find((s) => s.deviceId === manualId);
   if (manual) return manual;
   const recent = (list: MediaSource[]) =>
     [...list].sort((a, b) => Date.parse(b.lastChanged ?? '') - Date.parse(a.lastChanged ?? ''))[0];
   return (
-    recent(sources.filter((s) => s.state === 'playing')) ??
-    recent(sources.filter((s) => s.state === 'paused')) ??
-    recent(sources.filter((s) => s.state === 'on')) ??
-    null
+    recent(sources.filter(inUse)) ?? recent(sources.filter((s) => s.state === 'paused')) ?? null
   );
 }
 
@@ -115,7 +119,7 @@ export function MediaWidget() {
           <span className="sr-only">Mídia: </span>
           {primary ? describe(primary) : 'Nada tocando'}
         </span>
-        {primary?.state === 'playing' ? (
+        {primary && inUse(primary) ? (
           <span
             aria-hidden
             className="size-2 shrink-0 rounded-full bg-success motion-safe:animate-pulse"
