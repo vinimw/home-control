@@ -1,4 +1,4 @@
-import { Clapperboard, House, LayoutGrid, Settings, type LucideIcon } from 'lucide-react';
+import { Clapperboard, House, LayoutGrid, Music2, Settings, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   href: string;
@@ -10,6 +10,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/', label: 'Início', icon: House },
   { href: '/devices', label: 'Dispositivos', icon: LayoutGrid },
   { href: '/scenes', label: 'Cenas', icon: Clapperboard },
+  { href: '/music', label: 'Música', icon: Music2 },
   { href: '/settings', label: 'Ajustes', icon: Settings },
 ];
 
