@@ -6,7 +6,6 @@ import Link from 'next/link';
 import {
   SPOTIFY_CONTROL_SCOPE,
   SPOTIFY_LIBRARY_SCOPES,
-  type SpotifyPlaylist,
   type SpotifyStatus,
 } from '@home-control/shared';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -110,7 +109,6 @@ export function MusicPanel() {
 function DirectMusicView({ library }: { library: boolean }) {
   const spotify = useSpotifyControl();
   const { data, error, stale, loaded, receivedAt } = spotify;
-  const [openPlaylist, setOpenPlaylist] = useState<SpotifyPlaylist | null>(null);
   const nowRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const [miniVisible, setMiniVisible] = useState(false);
@@ -216,12 +214,12 @@ function DirectMusicView({ library }: { library: boolean }) {
 
       {library ? (
         <LibraryPanel
-          playlist={openPlaylist}
-          onClosePlaylist={() => setOpenPlaylist(null)}
           canPlay={canPlay}
           playHint="Para tocar uma faixa, escolha antes uma saída ativa do Spotify (Trocar saída)."
           busy={spotify.busy}
           onPlay={(track, contextUri) => void spotify.playTrack(track.id, contextUri)}
+          onPlayPlaylist={(id) => void spotify.playPlaylist(id)}
+          playlistHint="Para tocar uma playlist, escolha antes uma saída ativa do Spotify (Trocar saída)."
         />
       ) : (
         <p className="flex flex-wrap items-center gap-2 text-sm" role="status">
@@ -232,13 +230,12 @@ function DirectMusicView({ library }: { library: boolean }) {
           </Link>
         </p>
       )}
-      {openPlaylist ? null : (
+      {library ? null : (
         <PlaylistList
           canPlay={canPlay}
           busy={spotify.busy}
           hint="Para tocar uma playlist, escolha antes uma saída ativa do Spotify (Trocar saída)."
           onPlay={(id) => void spotify.playPlaylist(id)}
-          onOpen={library ? setOpenPlaylist : undefined}
         />
       )}
 
