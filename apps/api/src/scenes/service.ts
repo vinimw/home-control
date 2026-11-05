@@ -7,11 +7,13 @@ import type {
 } from '@home-control/shared';
 import type { ScenePreset, ScenePresetInstallResponse, ScenePresetKey } from '@home-control/shared';
 import { TEMPLATES, resolvePreset } from './presets.js';
+import { randomBytes } from 'node:crypto';
 import { ApiError, toErrorPayload } from '../errors.js';
 import { validateParams } from '../devices/actions/params.js';
-import type { DeviceActionService } from '../devices/actions/service.js';
+import type { ActionOrigin, DeviceActionService } from '../devices/actions/service.js';
 import type { DeviceRegistry } from '../devices/registry.js';
 import type { Logger } from '../homeassistant/types.js';
+import type { HistoryInput } from '../storage/history.js';
 import type { SceneRepository } from '../storage/scenes.js';
 
 export interface SceneServiceOptions {
@@ -19,6 +21,7 @@ export interface SceneServiceOptions {
   registry: DeviceRegistry;
   actions: DeviceActionService;
   logger: Logger;
+  history?: (entry: HistoryInput) => void;
   /** Longest a single step may take before it is recorded as failed. */
   stepTimeoutMs?: number;
 }
@@ -99,25 +102,53 @@ export class SceneService {
     this.running.add(scene.id);
     try {
       const steps: SceneStepResult[] = [];
+      const started = performance.now();
+      const origin = {
+        source: 'scene' as const,
+        sceneId: scene.id,
+        sceneName: scene.name,
+        runId: `run_${randomBytes(6).toString('hex')}`,
+      };
       for (const [index, step] of scene.steps.entries()) {
-        steps.push(await this.runStep(index, step));
+        steps.push(await this.runStep(index, step, origin));
       }
       const run: SceneRun = { status: summarize(steps), at: new Date().toISOString(), steps };
       this.options.scenes.recordRun(scene.id, run);
+      this.options.history?.({
+        kind: 'scene_run',
+        source: 'api',
+        deviceId: null,
+        command: null,
+        params: {},
+        sceneId: scene.id,
+        sceneName: scene.name,
+        runId: origin.runId,
+        outcome: run.status,
+        error: null,
+        durationMs: Math.round(performance.now() - started),
+      });
       return run;
     } finally {
       this.running.delete(scene.id);
     }
   }
 
-  private async runStep(index: number, step: SceneStep): Promise<SceneStepResult> {
+  private async runStep(
+    index: number,
+    step: SceneStep,
+    origin: ActionOrigin,
+  ): Promise<SceneStepResult> {
     const base = { index, deviceId: step.deviceId, command: step.command };
     const started = performance.now();
     const elapsed = () => Math.round(performance.now() - started);
     let timer: NodeJS.Timeout | undefined;
     try {
       const result = await Promise.race([
-        this.options.actions.execute(step.deviceId, { command: step.command, params: step.params }),
+        this.options.actions.execute(
+          step.deviceId,
+          { command: step.command, params: step.params },
+          origin,
+        ),
         new Promise<never>((_, reject) => {
           timer = setTimeout(
             () => reject(new ApiError('timeout', 'The step took too long and was not confirmed')),

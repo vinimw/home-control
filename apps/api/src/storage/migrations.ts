@@ -170,6 +170,31 @@ export const MIGRATIONS: readonly Migration[] = [
     );
   `,
   },
+  {
+    id: 9,
+    name: 'command_history',
+    sql: `
+    CREATE TABLE command_history (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      at          TEXT NOT NULL,
+      kind        TEXT NOT NULL,
+      source      TEXT NOT NULL,
+      device_id   TEXT,
+      command     TEXT,
+      params      TEXT NOT NULL DEFAULT '{}',
+      scene_id    TEXT,
+      scene_name  TEXT,
+      run_id      TEXT,
+      outcome     TEXT NOT NULL,
+      error_code  TEXT,
+      error_message TEXT,
+      duration_ms REAL
+    );
+    CREATE INDEX idx_command_history_at ON command_history(at);
+    CREATE INDEX idx_command_history_device ON command_history(device_id);
+    CREATE INDEX idx_command_history_scene ON command_history(scene_id);
+  `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');

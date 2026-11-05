@@ -6,6 +6,7 @@ export * from './devices.js';
 export * from './errors.js';
 export * from './events.js';
 export * from './health.js';
+export * from './history.js';
 export * from './homeassistant.js';
 export * from './scenes.js';
 export * from './settings.js';

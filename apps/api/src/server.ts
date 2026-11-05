@@ -22,6 +22,7 @@ import { registerRoomRoutes } from './routes/rooms.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSpotifyRoutes } from './routes/spotify.js';
 import { SceneService } from './scenes/service.js';
+import { registerHistoryRoutes } from './routes/history.js';
 import { registerSceneRoutes } from './routes/scenes.js';
 import { SpotifyPlayerService } from './spotify/ha-player.js';
 import { SecretBox } from './spotify/secret-box.js';
@@ -147,6 +148,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       logger: app.log,
       view: (id) => app.catalog.get(id),
       apps: tvApps,
+      history: (entry) => app.storage.history.record(entry),
       enabled: options.deviceActions?.enabled ?? false,
       confirmTimeoutMs: options.deviceActions?.confirmTimeoutMs,
     }),
@@ -171,6 +173,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       registry: app.devices,
       actions: app.deviceActions,
       logger: app.log,
+      history: (entry) => app.storage.history.record(entry),
     }),
   );
   const diagnosticReplies = new WeakMap<object, Record<string, unknown>>();
@@ -279,6 +282,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerDeviceLayoutRoutes(app);
   registerRoomRoutes(app);
   registerSettingsRoutes(app);
+  registerHistoryRoutes(app);
   registerSceneRoutes(app);
   registerSpotifyRoutes(app);
   registerAlexaRoutes(app);

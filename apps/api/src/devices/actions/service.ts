@@ -1,12 +1,21 @@
 import { z } from 'zod';
 import type { Device, DeviceActionResult } from '@home-control/shared';
 import { ApiError, toErrorPayload } from '../../errors.js';
+import type { HistoryInput } from '../../storage/history.js';
 import type { HomeAssistantService } from '../../homeassistant/service.js';
 import type { Logger } from '../../homeassistant/types.js';
 import type { DeviceRegistry } from '../registry.js';
 import { toServiceCall, type AdapterContext } from './adapter.js';
 import { expectationFor, type Expectation } from './expectations.js';
 import { validateParams } from './params.js';
+
+/** Where a command came from, for the audit history. */
+export interface ActionOrigin {
+  source: 'api' | 'scene';
+  sceneId?: string;
+  sceneName?: string;
+  runId?: string;
+}
 
 export interface DeviceActionServiceOptions {
   registry: DeviceRegistry;
@@ -16,6 +25,8 @@ export interface DeviceActionServiceOptions {
   view?: (deviceId: string) => Device | undefined;
   /** Launchable TV applications (name -> id), from configuration. */
   apps?: ReadonlyMap<string, string>;
+  /** Receives one audit entry per command (executed or rejected). Must not throw. */
+  history?: (entry: HistoryInput) => void;
   /** Master switch. Off by default until authentication exists. */
   enabled: boolean;
   /** How long to wait for the resulting state before answering `accepted`. */
@@ -78,7 +89,42 @@ export class DeviceActionService {
    * Throws an {@link ApiError} when the request is rejected before anything runs. Once execution starts,
    * failures are returned as a result with `status: 'failed'` instead of being thrown.
    */
-  async execute(deviceId: string, rawBody: unknown): Promise<DeviceActionResult> {
+  async execute(
+    deviceId: string,
+    rawBody: unknown,
+    origin: ActionOrigin = { source: 'api' },
+  ): Promise<DeviceActionResult> {
+    const started = performance.now();
+    const body = (rawBody ?? {}) as { command?: unknown; params?: unknown };
+    const audit = (outcome: HistoryInput['outcome'], error: HistoryInput['error']) =>
+      this.options.history?.({
+        kind: 'device_command',
+        source: origin.source,
+        deviceId: deviceId.slice(0, 100),
+        command: typeof body.command === 'string' ? body.command.slice(0, 64) : null,
+        params:
+          body.params && typeof body.params === 'object'
+            ? (body.params as Record<string, unknown>)
+            : {},
+        sceneId: origin.sceneId ?? null,
+        sceneName: origin.sceneName ?? null,
+        runId: origin.runId ?? null,
+        outcome,
+        error,
+        durationMs: Math.round(performance.now() - started),
+      });
+    try {
+      const result = await this.executeChecked(deviceId, rawBody);
+      audit(result.status, result.error ?? null);
+      return result;
+    } catch (error) {
+      // Refused before anything was sent.
+      audit('rejected', toErrorPayload(error));
+      throw error;
+    }
+  }
+
+  private async executeChecked(deviceId: string, rawBody: unknown): Promise<DeviceActionResult> {
     if (!this.options.enabled) {
       throw new ApiError(
         'actions_disabled',
