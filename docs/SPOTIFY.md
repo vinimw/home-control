@@ -1,13 +1,53 @@
 # Spotify
 
-Connects your Spotify account so Home Control can show your **devices** and **playlists** and what is
-playing. This task is **read-only**: it never changes playback (controlling playback is a later task and will
-ask for one more permission).
+Two separate paths, on purpose:
+
+- **Playback control** (play/pause/next/previous, choosing the output, starting a playlist) goes through the
+  **official Home Assistant Spotify integration**: Home Control -> API -> Home Assistant -> Spotify. No extra
+  Spotify permission, OAuth connection or polling is needed. See "Playback control" below.
+- **Reading your account** (playlists, devices, now playing) uses the direct, **read-only** connection from
+  the sections that follow. It stays only because Home Assistant cannot browse playlists while idle (see
+  below); it never changes playback.
 
 > **Status.** Everything below was built and tested against a **simulated Spotify** (a local server that
 > mimics the authorization, token and Web API endpoints, including PKCE checks). It has **not** been tried
 > against the real Spotify: that needs your account and your own Spotify app. Spotify changes its rules often
 > (see "Things that may differ"); the first real connection is the real test.
+
+## Playback control (through Home Assistant)
+
+Requires the official Spotify integration in Home Assistant (entity `media_player.spotify_*`, found
+automatically). Commands target that one entity; the browser never chooses an entity or a service.
+
+| Method | Path                       | Body                                           |
+| ------ | -------------------------- | ---------------------------------------------- |
+| GET    | `/spotify/player`          | State, available outputs and **capabilities**  |
+| POST   | `/spotify/player/command`  | `{ "command": "play\|pause\|next\|previous" }` |
+| POST   | `/spotify/player/source`   | `{ "source": "<output name from the list>" }`  |
+| POST   | `/spotify/player/playlist` | `{ "playlistId": "<Spotify playlist id>" }`    |
+
+- **Capabilities come from Home Assistant's `supported_features`, never assumed.** Verified on the installed
+  Home Assistant: while Spotify has no active session the entity is `idle` and only exposes
+  `select_source`. Play/pause/next/previous/`play_media` and `browse_media` (answers `not_supported`) appear
+  only once an output is active. A command that is not offered is refused with `422 unsupported_action`
+  before anything is sent.
+- **Outputs** are the entity's `source_list` (Spotify Connect devices currently available: phone, computer,
+  TV, Echo...). Choosing one that is not listed returns `409 device_unavailable`. Control is not restricted
+  to Echo.
+- **Accepted vs confirmed.** The result is `confirmed` only when the expected state was observed within a few
+  seconds; otherwise `accepted` (Home Assistant took it, Spotify did not confirm yet).
+- **No Alexa fallback** and no retry/wake loops.
+- Calls to Home Assistant appear in the existing diagnostics (observed Home Control -> Home Assistant calls,
+  not Home Assistant -> Spotify requests).
+- **Direct connection from #17 is kept for reading playlists only**: Home Assistant cannot browse them while
+  idle. It performs no playback calls. Playing a playlist goes through Home Assistant `play_media`
+  (`spotify:playlist:<id>`), which also requires an active output.
+
+**Validation status.** Verified against the real Home Assistant (read-only): entity discovery, outputs
+(`MacBook Pro de Vinicius`, `Todo lugar`, `echo show`), idle capabilities, and honest refusals of
+next/playlist/unknown output. **Not yet verified:** real play, pause, skip, output selection and playlist
+start, because they act on your devices and need an active Spotify session. Open Spotify on a device, then
+try the controls in **Ajustes > Spotify** and record the result in the pull request.
 
 ## Set it up (about 5 minutes)
 

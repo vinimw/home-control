@@ -21,6 +21,7 @@ import { registerDeviceLayoutRoutes } from './routes/device-layout.js';
 import { registerRoomRoutes } from './routes/rooms.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSpotifyRoutes } from './routes/spotify.js';
+import { SpotifyPlayerService } from './spotify/ha-player.js';
 import { SecretBox } from './spotify/secret-box.js';
 import { SpotifyService, type SpotifyEndpoints, type SpotifySettings } from './spotify/service.js';
 import { Storage } from './storage/index.js';
@@ -32,6 +33,7 @@ declare module 'fastify' {
     storage: Storage;
     auth: AuthService;
     spotify: SpotifyService;
+    spotifyPlayer: SpotifyPlayerService;
     devices: DeviceRegistry;
     catalog: DeviceCatalog;
     deviceEvents: DeviceEventHub;
@@ -109,6 +111,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       logger: app.log,
     }),
   );
+  app.decorate('spotifyPlayer', new SpotifyPlayerService({ homeAssistant: app.homeAssistant }));
   app.decorate(
     'auth',
     new AuthService(app.storage.auth, {

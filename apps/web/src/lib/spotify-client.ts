@@ -15,6 +15,10 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   unreachable: 'Não foi possível falar com o Spotify.',
   timeout: 'O Spotify demorou demais para responder.',
   invalid_response: 'O Spotify respondeu algo que não foi possível entender.',
+  unsupported_action: 'O Spotify não aceita este comando agora. Inicie a reprodução em uma saída.',
+  device_unavailable: 'Essa saída não está disponível no Spotify agora.',
+  not_found: 'O player do Spotify não foi encontrado no Home Assistant.',
+  disconnected: 'Sem conexão em tempo real com o Home Assistant.',
   csrf_invalid: 'A solicitação foi recusada por segurança. Recarregue a página.',
 };
 const FALLBACK = 'Não foi possível falar com o servidor.';
@@ -23,6 +27,7 @@ const FALLBACK = 'Não foi possível falar com o servidor.';
 export async function spotifyRequest<T>(
   path: string,
   method: 'GET' | 'POST' = 'GET',
+  payload?: unknown,
 ): Promise<SpotifyResult<T>> {
   let response: Response;
   try {
@@ -30,6 +35,7 @@ export async function spotifyRequest<T>(
       method,
       cache: 'no-store',
       headers: method === 'POST' ? { 'content-type': 'application/json', ...csrfHeaders() } : {},
+      body: payload === undefined ? undefined : JSON.stringify(payload),
     });
   } catch {
     return { ok: false, code: null, message: FALLBACK };
