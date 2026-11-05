@@ -79,8 +79,23 @@ fully editable (`PATCH /scenes/:id`) and removable.
   the device is supported.
 - Results are reported by the same run logic as any scene (`confirmed`, `accepted`, `partial`, `failed`).
 
+## Scenes screen (`/scenes`)
+
+- **List:** each scene with its steps, last run badge (`Confirmada`, `Aceita`, `Parcial`, `Falhou` or
+  `Nunca executada`) and a badge per step with the error message when it failed.
+- **Editor:** name plus ordered steps (move up/down, remove). Each step is picked from the devices that are
+  available **now** and the commands each one advertises; parameters are typed inputs limited to the
+  allowed range or options. A step whose device is gone, unavailable or no longer offers the command is
+  flagged and blocks saving until it is changed or removed, so unavailable actions are never selectable.
+- **Run:** the "Executar" button sends only the scene id. It shows a busy state while the server runs the
+  steps one by one (the API answers when all are done, so there is no live per-step progress), then shows
+  each step's real result. Failures are never shown as success.
+- **Templates:** Cinema, Boa noite and Música appear until installed ("Criar"), with how many of their
+  steps are available now.
+- Works on phones: single column, 44 px controls, native pickers.
+
 ## Limitations
 
 - No delays, conditions, or "stop on first error" yet: every step is attempted.
 - Spotify and Alexa saved commands are not step types yet; only device commands.
-- The scenes page in the web app is still a placeholder.
+- No live per-step progress while a scene runs: results appear when the run finishes.

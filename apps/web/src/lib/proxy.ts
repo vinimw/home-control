@@ -31,6 +31,10 @@ export const isCommandId = (value: string): boolean => COMMAND_ID.test(value);
 export const CUSTOM_DEVICE_ID = /^cd_[0-9a-f]{12}$/;
 export const isCustomDeviceId = (value: string): boolean => CUSTOM_DEVICE_ID.test(value);
 
+export const SCENE_ID = /^sc_[0-9a-f]{12}$/;
+export const isSceneId = (value: string): boolean => SCENE_ID.test(value);
+export const SCENE_PRESET_KEY = /^[a-z_]{1,32}$/;
+
 export const devicePath = (suffix = ''): string => `${API_DEVICES_PATH}${suffix}`;
 
 /** Headers that identify the user to the API. Nothing else from the browser is forwarded. */
