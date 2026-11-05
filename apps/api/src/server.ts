@@ -22,6 +22,8 @@ import { registerRoomRoutes } from './routes/rooms.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSpotifyRoutes } from './routes/spotify.js';
 import { SceneService } from './scenes/service.js';
+import { MediaActivityService } from './media/activity.js';
+import { registerMediaRoutes } from './routes/media.js';
 import { registerHistoryRoutes } from './routes/history.js';
 import { registerSceneRoutes } from './routes/scenes.js';
 import { SpotifyPlayerService } from './spotify/ha-player.js';
@@ -38,6 +40,7 @@ declare module 'fastify' {
     spotify: SpotifyService;
     spotifyPlayer: SpotifyPlayerService;
     scenes: SceneService;
+    mediaActivity: MediaActivityService;
     devices: DeviceRegistry;
     catalog: DeviceCatalog;
     deviceEvents: DeviceEventHub;
@@ -176,6 +179,10 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
       history: (entry) => app.storage.history.record(entry),
     }),
   );
+  app.decorate(
+    'mediaActivity',
+    new MediaActivityService({ registry: app.devices, homeAssistant: app.homeAssistant }),
+  );
   const diagnosticReplies = new WeakMap<object, Record<string, unknown>>();
   app.addHook('onSend', async (request, _reply, payload) => {
     const route = request.routeOptions.url ?? '';
@@ -283,6 +290,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerRoomRoutes(app);
   registerSettingsRoutes(app);
   registerHistoryRoutes(app);
+  registerMediaRoutes(app);
   registerSceneRoutes(app);
   registerSpotifyRoutes(app);
   registerAlexaRoutes(app);
