@@ -42,6 +42,7 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   spotify_restricted: 409,
   spotify_premium_required: 409,
   spotify_scope_missing: 409,
+  spotify_content_unavailable: 409,
   device_unavailable: 409,
   unsupported_action: 422,
   invalid_params: 422,

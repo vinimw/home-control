@@ -3,9 +3,15 @@
 import { useEffect, useState } from 'react';
 import { CircleAlert, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
-import { SPOTIFY_CONTROL_SCOPE, type SpotifyStatus } from '@home-control/shared';
+import {
+  SPOTIFY_CONTROL_SCOPE,
+  SPOTIFY_LIBRARY_SCOPES,
+  type SpotifyPlaylist,
+  type SpotifyStatus,
+} from '@home-control/shared';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { spotifyRequest, type SpotifyResult } from '@/lib/spotify-client';
+import { LibraryPanel } from './library-panel';
 import { PlaylistList } from './playlist-list';
 import { SpotifyDirectPlayer } from './spotify-direct-player';
 import { SpotifyPlayer } from './spotify-player';
@@ -83,13 +89,22 @@ export function MusicPanel() {
           </Link>
         </p>
       ) : null}
-      {path === 'direct' ? <DirectMusicView /> : <HaMusicView />}
+      {path === 'direct' ? (
+        <DirectMusicView
+          library={
+            status.ok && SPOTIFY_LIBRARY_SCOPES.every((scope) => status.data.scopes.includes(scope))
+          }
+        />
+      ) : (
+        <HaMusicView />
+      )}
     </div>
   );
 }
 
-function DirectMusicView() {
+function DirectMusicView({ library }: { library: boolean }) {
   const spotify = useSpotifyControl();
+  const [openPlaylist, setOpenPlaylist] = useState<SpotifyPlaylist | null>(null);
   const { state } = spotify;
   const active = state?.ok ? state.data.devices.some((d) => d.isActive) : false;
   const allowed = state?.ok ? state.data.canControl && state.data.premium !== false : false;
@@ -121,12 +136,33 @@ function DirectMusicView() {
           onTransfer={(deviceId) => void spotify.transfer(deviceId)}
         />
       )}
-      <PlaylistList
-        canPlay={allowed && active}
-        busy={spotify.busy}
-        hint="Para tocar uma playlist, escolha antes uma saída ativa do Spotify (botão Usar)."
-        onPlay={(id) => void spotify.playPlaylist(id)}
-      />
+      {library ? (
+        <LibraryPanel
+          playlist={openPlaylist}
+          onClosePlaylist={() => setOpenPlaylist(null)}
+          canPlay={allowed && active}
+          playHint="Para tocar uma faixa, escolha antes uma saída ativa do Spotify (botão Usar)."
+          busy={spotify.busy}
+          onPlay={(track, contextUri) => void spotify.playTrack(track.id, contextUri)}
+        />
+      ) : (
+        <p className="flex flex-wrap items-center gap-2 text-sm" role="status">
+          <CircleAlert aria-hidden className="size-4 shrink-0 text-warning" />
+          Para buscar e salvar músicas, conecte de novo e aceite as permissões da biblioteca.
+          <Link href="/settings" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            Abrir Ajustes
+          </Link>
+        </p>
+      )}
+      {openPlaylist ? null : (
+        <PlaylistList
+          canPlay={allowed && active}
+          busy={spotify.busy}
+          hint="Para tocar uma playlist, escolha antes uma saída ativa do Spotify (botão Usar)."
+          onPlay={(id) => void spotify.playPlaylist(id)}
+          onOpen={library ? setOpenPlaylist : undefined}
+        />
+      )}
     </>
   );
 }

@@ -106,6 +106,12 @@ export function useSpotifyControl() {
     command: (command: SpotifyControlCommand, deviceId?: string) =>
       run('control/command', { command, ...(deviceId ? { deviceId } : {}) }),
     transfer: (deviceId: string, play = true) => run('control/transfer', { deviceId, play }),
+    playTrack: (trackId: string, contextUri?: string, deviceId?: string) =>
+      run('control/track', {
+        trackId,
+        ...(contextUri ? { contextUri } : {}),
+        ...(deviceId ? { deviceId } : {}),
+      }),
     playPlaylist: (playlistId: string, deviceId?: string) =>
       run('control/playlist', { playlistId, ...(deviceId ? { deviceId } : {}) }),
   };
