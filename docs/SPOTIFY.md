@@ -9,10 +9,12 @@ Two separate paths, on purpose:
   the sections that follow. It stays only because Home Assistant cannot browse playlists while idle (see
   below); it never changes playback.
 
-> **Status.** Everything below was built and tested against a **simulated Spotify** (a local server that
-> mimics the authorization, token and Web API endpoints, including PKCE checks). It has **not** been tried
-> against the real Spotify: that needs your account and your own Spotify app. Spotify changes its rules often
-> (see "Things that may differ"); the first real connection is the real test.
+> **Status.** The direct connection and the configuration/test screen were built and checked against a
+> **simulated Spotify** (a local server that mimics the authorization, token and Web API endpoints, PKCE
+> included): save/validate, connect, restart-safe tokens, test results for missing permissions, free plan,
+> a 403 and a revoked authorization, and Client ID changes. It has **not** been tried against the real
+> Spotify with the household Premium account: that needs your own Spotify app and login. Spotify changes
+> its rules often (see "Things that may differ"); the first real connection is the real test.
 
 ## Playback control (through Home Assistant)
 
@@ -56,26 +58,71 @@ next/playlist/unknown output. **Not yet verified:** real play, pause, skip, outp
 start, because they act on your devices and need an active Spotify session. Open Spotify on a device, then
 try the controls in **Ajustes > Spotify** and record the result in the pull request.
 
-## Set it up (about 5 minutes)
+## Set it up from the app (about 5 minutes)
+
+You do not need to edit `.env`: everything is done in **Ajustes > Spotify**.
 
 1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) with your Spotify
-   account and **Create app**.
-2. **Redirect URI**: add exactly `http://127.0.0.1:3000/api/spotify/callback` (use your web port if it is not
-   3000). Spotify does **not** accept `localhost`; it accepts `https` or the loopback IP `127.0.0.1`.
-3. Under **APIs used**, tick **Web API**. Save.
-4. Copy the **Client ID**. You do **not** need the client secret: this uses the PKCE flow, which is built for
-   apps that cannot keep a secret.
-5. In `.env`:
+   account and **Create app** (tick **Web API**).
+2. In **Ajustes > Spotify > Aplicativo do Spotify** copy the **Callback (Redirect URI)** shown there and add
+   it under **Redirect URIs** in the dashboard, **identical, character by character**. Spotify accepts only
+   `https://...` or `http://127.0.0.1:<port>/...` (not `localhost`, and not a LAN address over `http`); the
+   path is always `/api/spotify/callback`. The screen validates this and explains what to do when the
+   address you opened the app on is not acceptable.
+3. Copy the **Client ID** from the dashboard into the form and press **Salvar**. There is no client secret:
+   this uses PKCE, built for apps that cannot keep one.
+4. A new app starts in **development mode**: only accounts you add under **User Management** can use it.
+   Add the household account.
+5. Press **Conectar Spotify**, approve on Spotify's own page (Home Control never sees your Spotify
+   password) and you return to the settings page.
+6. Press **Testar conexão** (see below).
 
-   ```bash
-   SPOTIFY_CLIENT_ID=<the client id>
-   SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/spotify/callback
-   ```
+### Saved configuration vs `.env`
 
-6. Restart the API (`docker compose up -d --force-recreate api`), open **`http://127.0.0.1:3000`** (see the
-   note below), log in, go to **Ajustes > Spotify** and press **Conectar Spotify**.
-7. A new app starts in **development mode**: only accounts you add under **User Management** in the
-   dashboard can use it. Add your own account.
+- The Client ID and callback saved in the app (table `spotify_config`) **take precedence** over
+  `SPOTIFY_CLIENT_ID` / `SPOTIFY_REDIRECT_URI`. Setups that already use the environment keep working
+  untouched and show _Do servidor (.env)_; saving a value switches to _Salvo no app_.
+- **Usar a configuração do servidor** deletes the saved value so the environment applies again (only shown
+  when the environment has one).
+- The Client ID is public (PKCE), so it is stored in plain text; **tokens stay encrypted** as described
+  below. Changing the **Client ID** forgets the connected account (tokens belong to one Spotify app) and
+  asks you to connect again; changing only the callback keeps it.
+- `PUT /spotify/config` `{ clientId, redirectUri }` and `DELETE /spotify/config` (login + CSRF) validate on
+  the server: 32 hexadecimal characters for the Client ID, and the callback rules above.
+
+### Test connection (read-only)
+
+`POST /spotify/test` runs six checks and never changes playback or returns a token:
+
+| Check        | Fails when                                                          | What the screen says                                      |
+| ------------ | ------------------------------------------------------------------- | --------------------------------------------------------- |
+| Configuração | Nothing saved, or the callback is not acceptable                    | Save the Client ID and callback                           |
+| Conexão      | Never connected, or access ended (revoked/expired)                  | "Conectar Spotify" / "Conectar de novo"                   |
+| Conta        | Spotify rejects the token (also refreshes it when needed), 403, 429 | Reconnect; add the account in User Management; wait       |
+| Permissões   | A read permission was not granted                                   | Lists the missing ones; "Conectar de novo" and accept all |
+| Premium      | _Warning_ when the plan is not `premium`                            | Reading works, controlling playback needs Premium         |
+| Dispositivos | The devices request fails                                           | Same causes as above; "no devices" is ok but explained    |
+
+A revoked authorization marks the connection as needing reconnection (the card then offers
+**Conectar de novo**) and leaves Home Assistant and its Spotify integration untouched.
+
+### Environment variables (still supported)
+
+```bash
+SPOTIFY_CLIENT_ID=<the client id>
+SPOTIFY_REDIRECT_URI=https://home.example.com/api/spotify/callback
+```
+
+Restart the API after editing (`docker compose up -d --force-recreate api`).
+
+### HTTPS callback or loopback
+
+- **Recommended for daily use:** a private https address in front of the app (for example a reverse proxy
+  or a VPN/tailnet name with a valid certificate). Register `https://<that-name>/api/spotify/callback`.
+  Do **not** forward the port on your router.
+- **Setup on the host only:** open the app at `http://127.0.0.1:3000` on the computer that runs it and
+  register `http://127.0.0.1:3000/api/spotify/callback`. Only the one-time connection needs that address;
+  afterwards the tokens live on the server and any device can see the data.
 
 ### Why `127.0.0.1` and not the usual address
 

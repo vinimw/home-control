@@ -121,6 +121,17 @@ export interface SpotifyRepository {
   clear(): void;
 }
 
+export interface SpotifyConfigRecord {
+  clientId: string;
+  redirectUri: string;
+}
+
+export interface SpotifyConfigRepository {
+  get(): SpotifyConfigRecord | undefined;
+  save(record: SpotifyConfigRecord): void;
+  clear(): void;
+}
+
 export interface AlexaCommandRepository {
   /** Oldest first, so the list does not reshuffle when a command is edited. */
   list(): AlexaCommand[];

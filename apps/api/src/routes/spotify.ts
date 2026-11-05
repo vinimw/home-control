@@ -5,7 +5,9 @@ import {
   API_SPOTIFY_PLAYER_PATH,
   type SpotifyPlayerResult,
   type SpotifyPlayerState,
+  type SpotifyConfigResponse,
   type SpotifyConnectResponse,
+  type SpotifyTestResult,
   type SpotifyDevicesResponse,
   type SpotifyPlaybackResponse,
   type SpotifyPlaylistsResponse,
@@ -13,6 +15,13 @@ import {
 } from '@home-control/shared';
 import { ApiError } from '../errors.js';
 import { playerCommandBody, playerPlaylistBody, playerSourceBody } from '../spotify/ha-player.js';
+
+const configBody = z
+  .object({
+    clientId: z.string().trim().min(1).max(128),
+    redirectUri: z.string().trim().min(1).max(300),
+  })
+  .strict();
 
 const callbackQuery = z
   .object({
@@ -54,6 +63,23 @@ export function registerSpotifyRoutes(app: FastifyInstance): void {
     };
     return reply.redirect(`/settings?spotify=${await outcome()}`, 302);
   });
+
+  /** Saves the Spotify app registration (Client ID + callback). Overrides the environment. */
+  app.put<{ Reply: SpotifyConfigResponse }>(`${API_SPOTIFY_PATH}/config`, async (request) => {
+    const parsed = configBody.safeParse(request.body);
+    if (!parsed.success) throw new ApiError('bad_request', 'Invalid request body');
+    return app.spotify.saveConfig(parsed.data);
+  });
+
+  /** Forgets the saved registration; the server environment (if any) applies again. */
+  app.delete<{ Reply: SpotifyConfigResponse }>(`${API_SPOTIFY_PATH}/config`, async () =>
+    app.spotify.clearConfig(),
+  );
+
+  /** Read-only check of the whole connection. Always 200 with per-check results. */
+  app.post<{ Reply: SpotifyTestResult }>(`${API_SPOTIFY_PATH}/test`, async () =>
+    app.spotify.test(),
+  );
 
   app.post(`${API_SPOTIFY_PATH}/disconnect`, async (_request, reply) => {
     app.spotify.disconnect();

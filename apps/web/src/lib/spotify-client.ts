@@ -19,6 +19,7 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   device_unavailable: 'Essa saída não está disponível no Spotify agora.',
   not_found: 'O player do Spotify não foi encontrado no Home Assistant.',
   disconnected: 'Sem conexão em tempo real com o Home Assistant.',
+  invalid_params: 'Confira o Client ID e o callback informados.',
   csrf_invalid: 'A solicitação foi recusada por segurança. Recarregue a página.',
 };
 const FALLBACK = 'Não foi possível falar com o servidor.';
@@ -26,7 +27,7 @@ const FALLBACK = 'Não foi possível falar com o servidor.';
 /** Calls this app's Spotify relay. Never throws: failures come back as an honest result. */
 export async function spotifyRequest<T>(
   path: string,
-  method: 'GET' | 'POST' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
   payload?: unknown,
 ): Promise<SpotifyResult<T>> {
   let response: Response;
@@ -34,7 +35,7 @@ export async function spotifyRequest<T>(
     response = await fetch(`/api/spotify/${path}`, {
       method,
       cache: 'no-store',
-      headers: method === 'POST' ? { 'content-type': 'application/json', ...csrfHeaders() } : {},
+      headers: method !== 'GET' ? { 'content-type': 'application/json', ...csrfHeaders() } : {},
       body: payload === undefined ? undefined : JSON.stringify(payload),
     });
   } catch {

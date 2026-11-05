@@ -16,6 +16,8 @@ import {
   type CustomDeviceRecord,
   type CustomDeviceRepository,
   type AuthRepository,
+  type SpotifyConfigRecord,
+  type SpotifyConfigRepository,
   type SpotifyConnectionRecord,
   type SpotifyRepository,
   type SessionRecord,
@@ -627,5 +629,30 @@ export class SqliteCustomDeviceRepository implements CustomDeviceRepository {
   count(): number {
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM custom_devices').get() as { n: number };
     return Number(row.n);
+  }
+}
+
+export class SqliteSpotifyConfigRepository implements SpotifyConfigRepository {
+  constructor(private readonly db: Database) {}
+
+  get(): SpotifyConfigRecord | undefined {
+    const row = this.db
+      .prepare('SELECT client_id, redirect_uri FROM spotify_config WHERE id = 1')
+      .get() as { client_id: string; redirect_uri: string } | undefined;
+    return row && { clientId: row.client_id, redirectUri: row.redirect_uri };
+  }
+
+  save(record: SpotifyConfigRecord): void {
+    this.db
+      .prepare(
+        `INSERT INTO spotify_config (id, client_id, redirect_uri, updated_at) VALUES (1, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET client_id = excluded.client_id,
+           redirect_uri = excluded.redirect_uri, updated_at = excluded.updated_at`,
+      )
+      .run(record.clientId, record.redirectUri, now());
+  }
+
+  clear(): void {
+    this.db.prepare('DELETE FROM spotify_config WHERE id = 1').run();
   }
 }
