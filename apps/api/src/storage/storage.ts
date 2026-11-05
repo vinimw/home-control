@@ -2,6 +2,7 @@ import { IN_MEMORY, openDatabase, type Database } from './database.js';
 import { Diagnostics } from '../diagnostics.js';
 import { StorageError } from './errors.js';
 import { SqliteDeviceLayoutRepository, type DeviceLayoutRepository } from './device-layout.js';
+import { SqliteSceneRepository, type SceneRepository } from './scenes.js';
 import { runMigrations, type MigrationResult } from './migrations.js';
 import type {
   AlexaCommandRepository,
@@ -40,6 +41,7 @@ export class Storage {
   readonly spotify: SpotifyRepository;
   readonly alexa: AlexaCommandRepository;
   readonly customDevices: CustomDeviceRepository;
+  readonly scenes: SceneRepository;
 
   private constructor(
     private readonly db: Database,
@@ -54,6 +56,7 @@ export class Storage {
     this.spotify = new SqliteSpotifyRepository(db);
     this.alexa = new SqliteAlexaCommandRepository(db);
     this.customDevices = new SqliteCustomDeviceRepository(db);
+    this.scenes = new SqliteSceneRepository(db);
   }
 
   /** Opens the database file and brings the schema up to date. Throws {@link StorageError}. */

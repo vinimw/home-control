@@ -21,6 +21,8 @@ import { registerDeviceLayoutRoutes } from './routes/device-layout.js';
 import { registerRoomRoutes } from './routes/rooms.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerSpotifyRoutes } from './routes/spotify.js';
+import { SceneService } from './scenes/service.js';
+import { registerSceneRoutes } from './routes/scenes.js';
 import { SpotifyPlayerService } from './spotify/ha-player.js';
 import { SecretBox } from './spotify/secret-box.js';
 import { SpotifyService, type SpotifyEndpoints, type SpotifySettings } from './spotify/service.js';
@@ -34,6 +36,7 @@ declare module 'fastify' {
     auth: AuthService;
     spotify: SpotifyService;
     spotifyPlayer: SpotifyPlayerService;
+    scenes: SceneService;
     devices: DeviceRegistry;
     catalog: DeviceCatalog;
     deviceEvents: DeviceEventHub;
@@ -161,6 +164,15 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     'customDevices',
     new CustomDeviceService({ storage: app.storage, registry: app.devices, alexa: app.alexa }),
   );
+  app.decorate(
+    'scenes',
+    new SceneService({
+      scenes: app.storage.scenes,
+      registry: app.devices,
+      actions: app.deviceActions,
+      logger: app.log,
+    }),
+  );
   const diagnosticReplies = new WeakMap<object, Record<string, unknown>>();
   app.addHook('onSend', async (request, _reply, payload) => {
     const route = request.routeOptions.url ?? '';
@@ -267,6 +279,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerDeviceLayoutRoutes(app);
   registerRoomRoutes(app);
   registerSettingsRoutes(app);
+  registerSceneRoutes(app);
   registerSpotifyRoutes(app);
   registerAlexaRoutes(app);
   registerDiagnosticsRoutes(app);
