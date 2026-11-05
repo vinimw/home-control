@@ -5,14 +5,17 @@ import { errorResponse, relayJson } from '@/lib/proxy';
 export const dynamic = 'force-dynamic';
 
 /** Fixed allowlist: the only Spotify endpoints the browser can reach, each with its one method. */
-const ACTIONS: Record<string, 'GET' | 'POST'> = {
-  status: 'GET',
-  playlists: 'GET',
-  devices: 'GET',
-  playback: 'GET',
-  connect: 'POST',
-  disconnect: 'POST',
-  callback: 'GET',
+const ACTIONS: Record<string, readonly ('GET' | 'POST' | 'PUT' | 'DELETE')[]> = {
+  status: ['GET'],
+  playlists: ['GET'],
+  devices: ['GET'],
+  playback: ['GET'],
+  connect: ['POST'],
+  disconnect: ['POST'],
+  callback: ['GET'],
+  // Saved app registration (Client ID + callback) and the read-only connection test.
+  config: ['PUT', 'DELETE'],
+  test: ['POST'],
 };
 
 /** Only these outcomes may be sent back to the browser, so the redirect can never be steered elsewhere. */
@@ -48,10 +51,10 @@ async function callback(request: Request): Promise<Response> {
 async function handle(
   request: Request,
   params: Promise<{ action: string }>,
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
 ) {
   const { action } = await params;
-  if (!Object.hasOwn(ACTIONS, action) || ACTIONS[action] !== method) {
+  if (!Object.hasOwn(ACTIONS, action) || !ACTIONS[action]?.includes(method)) {
     return errorResponse('not_found', 'Not found', 404);
   }
   if (action === 'callback') return callback(request);
@@ -64,4 +67,12 @@ export function GET(request: Request, { params }: { params: Promise<{ action: st
 
 export function POST(request: Request, { params }: { params: Promise<{ action: string }> }) {
   return handle(request, params, 'POST');
+}
+
+export function PUT(request: Request, { params }: { params: Promise<{ action: string }> }) {
+  return handle(request, params, 'PUT');
+}
+
+export function DELETE(request: Request, { params }: { params: Promise<{ action: string }> }) {
+  return handle(request, params, 'DELETE');
 }

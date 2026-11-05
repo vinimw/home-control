@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type {
-  ApiErrorCode,
   SpotifyDevice,
   SpotifyDevicesResponse,
   SpotifyPlayback,
@@ -8,9 +7,23 @@ import type {
   SpotifyPlaylistsResponse,
   SpotifyStatus,
 } from '@home-control/shared';
+import {
+  SPOTIFY_CLIENT_ID_PATTERN,
+  spotifyRedirectUriProblem,
+  type ApiErrorCode,
+  type SpotifyConfigInput,
+  type SpotifyConfigResponse,
+  type SpotifyConfigView,
+  type SpotifyTestCheck,
+  type SpotifyTestResult,
+} from '@home-control/shared';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../homeassistant/types.js';
-import type { SpotifyConnectionRecord, SpotifyRepository } from '../storage/index.js';
+import type {
+  SpotifyConfigRepository,
+  SpotifyConnectionRecord,
+  SpotifyRepository,
+} from '../storage/index.js';
 import type { SecretBox } from './secret-box.js';
 
 export interface SpotifySettings {
@@ -40,7 +53,9 @@ export const SPOTIFY_SCOPES = [
 ] as const;
 
 export interface SpotifyServiceOptions {
+  /** From the server's environment. A configuration saved in the app takes precedence. */
   settings: SpotifySettings | null;
+  configRepo: SpotifyConfigRepository;
   repo: SpotifyRepository;
   secrets: SecretBox;
   logger: Logger;
@@ -52,6 +67,9 @@ export interface SpotifyServiceOptions {
 
 interface PendingAuthorization {
   verifier: string;
+  /** The registration this flow started with, so editing the settings mid-flow cannot break it. */
+  clientId: string;
+  redirectUri: string;
   createdAt: number;
 }
 
@@ -94,8 +112,72 @@ export class SpotifyService {
     this.clock = options.clock ?? Date.now;
   }
 
+  /** The registration in use: saved in the app (preferred) or from the environment. */
+  private effective(): { source: 'saved' | 'environment'; settings: SpotifySettings } | null {
+    const saved = this.options.configRepo.get();
+    if (saved) {
+      return {
+        source: 'saved',
+        settings: { clientId: saved.clientId, redirectUri: saved.redirectUri },
+      };
+    }
+    return this.options.settings
+      ? { source: 'environment', settings: this.options.settings }
+      : null;
+  }
+
   get configured(): boolean {
-    return this.options.settings !== null;
+    return this.effective() !== null;
+  }
+
+  private configView(): SpotifyConfigView {
+    const active = this.effective();
+    return {
+      source: active?.source ?? null,
+      clientId: active?.settings.clientId ?? null,
+      redirectUri: active?.settings.redirectUri ?? null,
+      environmentAvailable: this.options.settings !== null,
+    };
+  }
+
+  /** Validates and saves the app registration. A different Client ID invalidates the saved account. */
+  saveConfig(input: SpotifyConfigInput): SpotifyConfigResponse {
+    const clientId = input.clientId.trim();
+    const redirectUri = input.redirectUri.trim();
+    if (!SPOTIFY_CLIENT_ID_PATTERN.test(clientId)) {
+      throw new ApiError(
+        'invalid_params',
+        'clientId: the Client ID has 32 hexadecimal characters (copy it from the Spotify Developer Dashboard).',
+      );
+    }
+    const problem = spotifyRedirectUriProblem(redirectUri);
+    if (problem) throw new ApiError('invalid_params', `redirectUri: ${problem}`);
+    const before = this.effective()?.settings.clientId ?? null;
+    this.options.configRepo.save({ clientId, redirectUri });
+    return this.afterConfigChange(before);
+  }
+
+  /** Removes the saved registration; the environment one (if any) becomes active again. */
+  clearConfig(): SpotifyConfigResponse {
+    const before = this.effective()?.settings.clientId ?? null;
+    this.options.configRepo.clear();
+    return this.afterConfigChange(before);
+  }
+
+  private afterConfigChange(previousClientId: string | null): SpotifyConfigResponse {
+    this.pending.clear();
+    const now = this.effective()?.settings.clientId ?? null;
+    let connectionReset = false;
+    // Tokens belong to one Spotify app: with another Client ID they would never refresh.
+    if (previousClientId !== now && this.options.repo.get()) {
+      this.options.repo.clear();
+      connectionReset = true;
+    }
+    this.options.logger.info(
+      { source: this.effective()?.source ?? null },
+      'spotify config changed',
+    );
+    return { status: this.status(), connectionReset };
   }
 
   status(): SpotifyStatus {
@@ -115,17 +197,19 @@ export class SpotifyService {
         record?.lastErrorCode && record.lastErrorMessage
           ? { code: record.lastErrorCode as ApiErrorCode, message: record.lastErrorMessage }
           : null,
+      config: this.configView(),
     };
   }
 
   private settings(): SpotifySettings {
-    if (!this.options.settings) {
+    const active = this.effective();
+    if (!active) {
       throw new ApiError(
         'not_configured',
-        'Spotify is not configured. Set SPOTIFY_CLIENT_ID and SPOTIFY_REDIRECT_URI (see docs/SPOTIFY.md).',
+        'Spotify is not configured. Save the Client ID and callback in Settings > Spotify (see docs/SPOTIFY.md).',
       );
     }
-    return this.options.settings;
+    return active.settings;
   }
 
   /** Step 1: a one-time `state` and PKCE challenge; the browser then goes to Spotify to approve access. */
@@ -141,7 +225,7 @@ export class SpotifyService {
 
     const state = b64url(randomBytes(24));
     const verifier = b64url(randomBytes(64));
-    this.pending.set(state, { verifier, createdAt: this.clock() });
+    this.pending.set(state, { verifier, clientId, redirectUri, createdAt: this.clock() });
 
     const url = new URL('/authorize', this.endpoints.accountsUrl);
     url.search = new URLSearchParams({
@@ -166,7 +250,7 @@ export class SpotifyService {
     this.pending.delete(state); // single use, whatever happens next
     if (!pending) throw new ApiError('invalid_credentials', 'Unknown or expired authorization.');
 
-    const { clientId, redirectUri } = this.settings();
+    const { clientId, redirectUri } = pending;
     const tokens = await this.requestTokens({
       grant_type: 'authorization_code',
       code,
@@ -211,6 +295,163 @@ export class SpotifyService {
   disconnect(): void {
     this.options.repo.clear();
     this.options.logger.info({}, 'spotify disconnected');
+  }
+
+  /**
+   * Read-only end-to-end check of the direct connection: configuration, saved authorization, account access,
+   * granted permissions, Premium and device visibility. It never changes playback and never returns tokens.
+   */
+  async test(): Promise<SpotifyTestResult> {
+    const checks: SpotifyTestCheck[] = [];
+    const add = (check: SpotifyTestCheck) => checks.push(check);
+    const skipped = (id: SpotifyTestCheck['id'], label: string, why: string) =>
+      add({ id, label, status: 'skipped', message: why });
+    const finish = (): SpotifyTestResult => ({
+      ok:
+        checks.every(
+          (c) => c.status === 'ok' || c.status === 'warning' || c.status === 'skipped',
+        ) && checks.some((c) => c.status === 'ok'),
+      checks,
+      testedAt: new Date(this.clock()).toISOString(),
+    });
+
+    const active = this.effective();
+    if (!active) {
+      add({
+        id: 'config',
+        label: 'Configuração',
+        status: 'failed',
+        message: 'Salve o Client ID e o callback do seu app do Spotify nesta tela.',
+      });
+    } else {
+      const problem = spotifyRedirectUriProblem(active.settings.redirectUri);
+      add({
+        id: 'config',
+        label: 'Configuração',
+        status: problem ? 'failed' : 'ok',
+        message: problem ?? 'Client ID e callback salvos e válidos.',
+      });
+    }
+
+    const record = this.options.repo.get();
+    if (!active) {
+      skipped('connection', 'Conexão', 'Configure o app primeiro.');
+    } else if (!record) {
+      add({
+        id: 'connection',
+        label: 'Conexão',
+        status: 'failed',
+        message: 'A conta ainda não foi conectada. Use "Conectar Spotify".',
+      });
+    } else if (record.reauthRequired || !record.refreshTokenEnc) {
+      add({
+        id: 'connection',
+        label: 'Conexão',
+        status: 'failed',
+        message: 'O acesso terminou (revogado ou expirado). Use "Conectar de novo".',
+      });
+    } else {
+      add({ id: 'connection', label: 'Conexão', status: 'ok', message: 'Autorização salva.' });
+    }
+    if (checks.find((c) => c.id === 'connection')?.status !== 'ok') {
+      for (const [id, label] of [
+        ['account', 'Conta'],
+        ['scopes', 'Permissões'],
+        ['premium', 'Premium'],
+        ['devices', 'Dispositivos'],
+      ] as const) {
+        skipped(id, label, 'Depende da conexão.');
+      }
+      return finish();
+    }
+
+    // Account: also proves the token works (refreshing it when needed).
+    let me: Record<string, unknown> | null = null;
+    try {
+      me = asRecord(await this.authorized('/me'));
+      add({
+        id: 'account',
+        label: 'Conta',
+        status: 'ok',
+        message: `Acesso confirmado${asString(me.display_name) ? ` para ${asString(me.display_name)}` : ''}.`,
+      });
+    } catch (error) {
+      add({
+        id: 'account',
+        label: 'Conta',
+        status: 'failed',
+        message: this.describeTestError(error),
+      });
+    }
+
+    const granted = new Set((this.options.repo.get()?.scope ?? '').split(' ').filter(Boolean));
+    const missing = SPOTIFY_SCOPES.filter((scope) => !granted.has(scope));
+    add({
+      id: 'scopes',
+      label: 'Permissões',
+      status: missing.length === 0 ? 'ok' : 'failed',
+      message:
+        missing.length === 0
+          ? 'Todas as permissões de leitura foram concedidas.'
+          : `Faltam permissões (${missing.join(', ')}). Use "Conectar de novo" e aceite todas.`,
+    });
+
+    if (me) {
+      const product = asString(me.product);
+      add({
+        id: 'premium',
+        label: 'Premium',
+        status: product === 'premium' ? 'ok' : 'warning',
+        message:
+          product === 'premium'
+            ? 'Conta Premium: o Spotify permite controlar a reprodução.'
+            : `Conta ${product ?? 'sem plano informado'}: ver dispositivos e playlists funciona, mas o Spotify só permite controlar a reprodução com Premium.`,
+      });
+    } else {
+      skipped('premium', 'Premium', 'Depende da conta.');
+    }
+
+    try {
+      const body = asRecord(await this.authorized('/me/player/devices'));
+      const count = Array.isArray(body.devices) ? body.devices.length : 0;
+      add({
+        id: 'devices',
+        label: 'Dispositivos',
+        status: 'ok',
+        message:
+          count > 0
+            ? `${count} dispositivo(s) disponível(is) agora.`
+            : 'Acesso ok, mas nenhum dispositivo está disponível agora. Abra o Spotify em um aparelho.',
+      });
+    } catch (error) {
+      add({
+        id: 'devices',
+        label: 'Dispositivos',
+        status: 'failed',
+        message: this.describeTestError(error),
+      });
+    }
+    return finish();
+  }
+
+  /** Actionable pt-BR text for a failed read-only check; never includes Spotify's raw response. */
+  private describeTestError(error: unknown): string {
+    if (error instanceof ApiError) {
+      switch (error.code) {
+        case 'spotify_connect_required':
+          return 'O Spotify não aceita mais esta autorização. Use "Conectar de novo".';
+        case 'spotify_forbidden':
+          return 'O Spotify recusou o acesso. Com o app em modo de desenvolvimento, adicione esta conta em User Management no Dashboard do Spotify.';
+        case 'too_many_requests':
+          return 'O Spotify está limitando as requisições deste app. Tente de novo em instantes.';
+        case 'timeout':
+        case 'unreachable':
+          return 'Não foi possível falar com o Spotify. Verifique a internet do servidor.';
+        default:
+          return 'O Spotify respondeu algo inesperado. Tente de novo mais tarde.';
+      }
+    }
+    return 'Falha inesperada ao falar com o Spotify.';
   }
 
   async playlists(): Promise<SpotifyPlaylistsResponse> {

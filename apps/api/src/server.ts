@@ -114,6 +114,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         : null,
       endpoints: options.spotify?.endpoints,
       repo: app.storage.spotify,
+      configRepo: app.storage.spotifyConfig,
       secrets: options.secrets ?? SecretBox.random(),
       logger: app.log,
     }),

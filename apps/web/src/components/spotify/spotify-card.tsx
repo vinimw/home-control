@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SpotifyConfigForm } from './spotify-config';
 import { spotifyRequest, type SpotifyResult } from '@/lib/spotify-client';
 
 type Outcome = 'connected' | 'denied' | 'error' | undefined;
@@ -72,6 +73,11 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
     void load();
   }, [load]);
 
+  function onConfigChanged(next: SpotifyStatus) {
+    setStatus({ ok: true, data: next });
+    void load();
+  }
+
   async function connect() {
     setBusy(true);
     setError(null);
@@ -119,11 +125,13 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
           </Button>
         </>
       ) : !s?.configured ? (
-        <p className="text-sm text-muted-foreground">
-          O Spotify ainda não foi configurado neste servidor. Crie o app no Spotify Developer e
-          defina <code>SPOTIFY_CLIENT_ID</code> e <code>SPOTIFY_REDIRECT_URI</code> (passo a passo
-          em <code>docs/SPOTIFY.md</code>).
-        </p>
+        <>
+          <p className="text-sm text-muted-foreground">
+            Configure o app do Spotify para conectar sua conta. Passo a passo em{' '}
+            <code>docs/SPOTIFY.md</code>.
+          </p>
+          <SpotifyConfigForm status={s!} onChanged={onConfigChanged} />
+        </>
       ) : !s.connected ? (
         <>
           {s.reauthRequired ? (
@@ -138,6 +146,12 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
               Conecte sua conta para ver dispositivos e playlists. Só pedimos permissão de leitura.
             </p>
           )}
+          <details className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">Configuração do app</summary>
+            <div className="mt-3">
+              <SpotifyConfigForm status={s} onChanged={onConfigChanged} />
+            </div>
+          </details>
           <Button
             className="self-start"
             onClick={() => void connect()}
@@ -245,6 +259,15 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
               </>
             )}
           </section>
+
+          <details className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Configuração do app e teste de conexão
+            </summary>
+            <div className="mt-3">
+              <SpotifyConfigForm status={s} onChanged={onConfigChanged} />
+            </div>
+          </details>
 
           <div className="flex flex-wrap gap-2">
             <Link href="/music" className={buttonVariants({ variant: 'outline' })}>

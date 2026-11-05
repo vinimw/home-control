@@ -1,6 +1,6 @@
 /**
  * Spotify integration contracts. Tokens never appear here: they live only on the API server.
- * Read-only for now: playback control arrives with its own task and its own (additional) permission.
+ * The direct connection is read-only; playback control goes through Home Assistant.
  */
 import type { ApiErrorPayload } from './errors.js';
 
@@ -18,6 +18,72 @@ export interface SpotifyStatus {
   scopes: string[];
   connectedAt: string | null;
   lastError: ApiErrorPayload | null;
+  /** The app registration in use (the Client ID is public: this is a PKCE client with no secret). */
+  config: SpotifyConfigView;
+}
+
+/** Path of the page Spotify sends the browser back to; the full URL to register is `<origin>` + this. */
+export const SPOTIFY_CALLBACK_PATH = '/api/spotify/callback';
+
+export type SpotifyConfigSource = 'saved' | 'environment';
+
+export interface SpotifyConfigView {
+  /** Where the active configuration comes from: saved in the app, or the server's environment. */
+  source: SpotifyConfigSource | null;
+  clientId: string | null;
+  redirectUri: string | null;
+  /** A configuration saved in the app overrides the environment; true when removing it falls back to one. */
+  environmentAvailable: boolean;
+}
+
+/** `PUT /spotify/config` */
+export interface SpotifyConfigInput {
+  clientId: string;
+  redirectUri: string;
+}
+
+/** `PUT`/`DELETE /spotify/config`: `connectionReset` is true when the saved account had to be forgotten. */
+export interface SpotifyConfigResponse {
+  status: SpotifyStatus;
+  connectionReset: boolean;
+}
+
+/** Spotify Client IDs are 32 hexadecimal characters. */
+export const SPOTIFY_CLIENT_ID_PATTERN = /^[0-9a-f]{32}$/i;
+
+/**
+ * Spotify only accepts `https` redirect URIs, or `http` on the loopback IP (not `localhost`). Returns a
+ * pt-BR explanation of the problem, or `null` when the value is acceptable.
+ */
+export function spotifyRedirectUriProblem(value: string): string | null {
+  const match = /^(https?):\/\/([^/?#\s]+)(\/[^?#\s]*)?(\?[^#\s]*)?(#\S*)?$/i.exec(value.trim());
+  if (!match) return 'Informe uma URL completa, como https://seu-dominio/api/spotify/callback.';
+  const [, scheme, authority, path = '', query, hash] = match;
+  const host = authority!.replace(/:\d{1,5}$/, '').toLowerCase();
+  const loopback = scheme!.toLowerCase() === 'http' && (host === '127.0.0.1' || host === '[::1]');
+  if (scheme!.toLowerCase() !== 'https' && !loopback) {
+    return 'O Spotify só aceita https, ou http no IP de loopback 127.0.0.1 (não aceita "localhost" nem endereços da rede local em http).';
+  }
+  if (path !== SPOTIFY_CALLBACK_PATH || query || hash) {
+    return `O caminho deve ser exatamente ${SPOTIFY_CALLBACK_PATH}, sem parâmetros.`;
+  }
+  return null;
+}
+
+/** `POST /spotify/test`: read-only checks of the whole direct connection. */
+export interface SpotifyTestCheck {
+  id: 'config' | 'connection' | 'account' | 'scopes' | 'premium' | 'devices';
+  label: string;
+  /** `warning` does not fail the test but needs attention (for example no Premium). */
+  status: 'ok' | 'warning' | 'failed' | 'skipped';
+  /** What happened and, when it is not ok, what to do. */
+  message: string;
+}
+
+export interface SpotifyTestResult {
+  ok: boolean;
+  checks: SpotifyTestCheck[];
+  testedAt: string;
 }
 
 export interface SpotifyAccount {

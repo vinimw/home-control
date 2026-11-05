@@ -9,6 +9,7 @@ import type {
   AlexaCommandRepository,
   AuthRepository,
   CustomDeviceRepository,
+  SpotifyConfigRepository,
   SpotifyRepository,
   DeviceSettingsRepository,
   RoomRepository,
@@ -18,6 +19,7 @@ import {
   SqliteAlexaCommandRepository,
   SqliteAuthRepository,
   SqliteCustomDeviceRepository,
+  SqliteSpotifyConfigRepository,
   SqliteSpotifyRepository,
   SqliteDeviceSettingsRepository,
   SqliteRoomRepository,
@@ -40,6 +42,7 @@ export class Storage {
   readonly settings: SettingsRepository;
   readonly auth: AuthRepository;
   readonly spotify: SpotifyRepository;
+  readonly spotifyConfig: SpotifyConfigRepository;
   readonly alexa: AlexaCommandRepository;
   readonly customDevices: CustomDeviceRepository;
   readonly scenes: SceneRepository;
@@ -56,6 +59,7 @@ export class Storage {
     this.settings = new SqliteSettingsRepository(db);
     this.auth = new SqliteAuthRepository(db);
     this.spotify = new SqliteSpotifyRepository(db);
+    this.spotifyConfig = new SqliteSpotifyConfigRepository(db);
     this.alexa = new SqliteAlexaCommandRepository(db);
     this.customDevices = new SqliteCustomDeviceRepository(db);
     this.scenes = new SqliteSceneRepository(db);

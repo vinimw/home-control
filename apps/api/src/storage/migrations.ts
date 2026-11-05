@@ -195,6 +195,20 @@ export const MIGRATIONS: readonly Migration[] = [
     CREATE INDEX idx_command_history_scene ON command_history(scene_id);
   `,
   },
+  {
+    id: 10,
+    name: 'spotify_config',
+    sql: `
+    -- The Spotify app registration saved from the settings screen. The Client ID is public (PKCE client,
+    -- no secret), so nothing here needs encryption. At most one row; it overrides the environment.
+    CREATE TABLE spotify_config (
+      id           INTEGER PRIMARY KEY CHECK (id = 1),
+      client_id    TEXT NOT NULL,
+      redirect_uri TEXT NOT NULL,
+      updated_at   TEXT NOT NULL
+    );
+  `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');
