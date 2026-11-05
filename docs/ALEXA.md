@@ -106,3 +106,14 @@ record here:
 | Does it start playback or only open the app           | ⬜     |
 | Play / pause / next / previous / volume (which exist) | ⬜     |
 | A draft tested before saving                          | ⬜     |
+
+## System diagnostics (#58, first delivery)
+
+Open **Alexa → Diagnóstico da Alexa** or the link in settings (`/echo/diagnostics`). The screen reads
+local history only: no Alexa test, integration reload or forced provider refresh is performed. Opening
+it does not require reactivating Alexa. It shows our operations and shared HA REST/WebSocket activity;
+it does not count requests made internally by HA or claim a total Amazon request budget.
+
+See [capture design and limits](ALEXA_DIAGNOSTICS_DESIGN.md) for dispatch accounting, correlation,
+sanitized request/response summaries, retention, export and privacy. Raw Alexa text and response state
+payloads are intentionally omitted. New history starts after deployment; older traffic is not reconstructed.

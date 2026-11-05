@@ -1,4 +1,5 @@
 import { IN_MEMORY, openDatabase, type Database } from './database.js';
+import { Diagnostics } from '../diagnostics.js';
 import { StorageError } from './errors.js';
 import { SqliteDeviceLayoutRepository, type DeviceLayoutRepository } from './device-layout.js';
 import { runMigrations, type MigrationResult } from './migrations.js';
@@ -30,6 +31,7 @@ export interface StorageSummary {
 
 /** The API's persistent storage: opens the database, migrates it and exposes the repositories. */
 export class Storage {
+  readonly diagnostics: Diagnostics;
   readonly layout: DeviceLayoutRepository;
   readonly rooms: RoomRepository;
   readonly deviceSettings: DeviceSettingsRepository;
@@ -43,6 +45,7 @@ export class Storage {
     private readonly db: Database,
     readonly migration: MigrationResult,
   ) {
+    this.diagnostics = new Diagnostics(db);
     this.layout = new SqliteDeviceLayoutRepository(db);
     this.rooms = new SqliteRoomRepository(db);
     this.deviceSettings = new SqliteDeviceSettingsRepository(db);

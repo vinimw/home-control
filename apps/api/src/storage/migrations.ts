@@ -147,6 +147,15 @@ export const MIGRATIONS: readonly Migration[] = [
       INSERT INTO device_layout (id) VALUES (1);
     `,
   },
+  {
+    id: 7,
+    name: 'system_diagnostics',
+    sql: `
+    CREATE TABLE diagnostics (id TEXT PRIMARY KEY, at TEXT NOT NULL, kind TEXT NOT NULL,
+      source TEXT NOT NULL, action TEXT NOT NULL, outcome TEXT NOT NULL, payload TEXT NOT NULL);
+    CREATE INDEX idx_diagnostics_at ON diagnostics(at);
+  `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');

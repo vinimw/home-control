@@ -21,6 +21,9 @@ export default async function SettingsPage({
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Ajustes</h1>
 
+      <Link href="/echo/diagnostics" className="min-h-11 rounded-md border p-3 text-sm">
+        Diagnóstico da Alexa
+      </Link>
       <Card>
         <CardHeader>
           <CardTitle>Aparência</CardTitle>

@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { diagnosticContext, safeRequest } from './diagnostics.js';
+import { registerDiagnosticsRoutes } from './routes/diagnostics.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { API_HEALTH_PATH, type ApiErrorBody, type HealthResponse } from '@home-control/shared';
 import { registerAuthGate } from './auth/plugin.js';
@@ -68,6 +71,7 @@ export interface ServerOptions {
 
 export function buildServer(options: ServerOptions = {}): FastifyInstance {
   const app = Fastify({
+    genReqId: () => randomUUID(),
     logger: {
       level: options.logLevel ?? 'info',
       // Defense in depth: credentials must never reach the logs.
@@ -84,8 +88,15 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     },
   });
 
-  app.decorate('homeAssistant', new HomeAssistantService(options.homeAssistant ?? null, app.log));
   app.decorate('storage', options.storage ?? Storage.openInMemory());
+  app.decorate(
+    'homeAssistant',
+    new HomeAssistantService(
+      options.homeAssistant ?? null,
+      app.log,
+      app.storage.diagnostics.observe,
+    ),
+  );
   app.decorate(
     'spotify',
     new SpotifyService({
@@ -147,6 +158,64 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     'customDevices',
     new CustomDeviceService({ storage: app.storage, registry: app.devices, alexa: app.alexa }),
   );
+  const diagnosticReplies = new WeakMap<object, Record<string, unknown>>();
+  app.addHook('onSend', async (request, _reply, payload) => {
+    const route = request.routeOptions.url ?? '';
+    if (
+      request.method !== 'GET' &&
+      /^\/(alexa|custom-devices|devices)(\/|$)/.test(route) &&
+      typeof payload === 'string' &&
+      payload.length < 100000
+    ) {
+      try {
+        const result = JSON.parse(payload);
+        const summary: Record<string, unknown> = {};
+        if (['accepted', 'confirmed', 'failed'].includes(result?.status))
+          summary.result = result.status;
+        if (typeof result?.error?.code === 'string' && result.error.code in HTTP_STATUS_BY_CODE)
+          summary.errorCode = result.error.code;
+        diagnosticReplies.set(request, summary);
+      } catch {
+        /* no raw response logging */
+      }
+    }
+    return payload;
+  });
+  app.addHook('onRequest', (request, _reply, done) => {
+    diagnosticContext.run(
+      {
+        operationId: request.id,
+        source: request.method + ' ' + (request.routeOptions.url ?? 'unknown'),
+      },
+      done,
+    );
+  });
+  app.addHook('onResponse', async (request, reply) => {
+    const route = request.routeOptions.url ?? '';
+    if (!/^\/(alexa|custom-devices|devices|ha)(\/|$)/.test(route) || route.endsWith('/events'))
+      return;
+    app.storage.diagnostics.observe({
+      kind: 'operation',
+      operationId: request.id,
+      source: request.method + ' ' + route,
+      action: request.method + ' ' + route,
+      outcome: reply.statusCode >= 400 ? 'failed' : 'completed',
+      status: reply.statusCode,
+      durationMs: Math.round(reply.elapsedTime * 100) / 100,
+      target:
+        Object.values((request.params ?? {}) as Record<string, unknown>).find(
+          (value): value is string =>
+            typeof value === 'string' &&
+            /^(dev_[a-f0-9]{16}|cd_[a-f0-9]{12}|ac_[a-f0-9]{12})$/.test(value),
+        ) ?? null,
+      request: safeRequest(request.body),
+      response: {
+        ...diagnosticReplies.get(request),
+        httpStatus: reply.statusCode,
+        restAttempts: app.storage.diagnostics.attemptsFor(request.id),
+      },
+    });
+  });
   registerAuthGate(app);
   const purgeTimer = setInterval(() => app.auth.purgeExpired(), 60 * 60 * 1000);
   purgeTimer.unref();
@@ -197,6 +266,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   registerSettingsRoutes(app);
   registerSpotifyRoutes(app);
   registerAlexaRoutes(app);
+  registerDiagnosticsRoutes(app);
   registerCustomDeviceRoutes(app);
 
   return app;
