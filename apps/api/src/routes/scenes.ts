@@ -5,6 +5,9 @@ import {
   SCENE_NAME_MAX,
   SCENE_STEPS_MAX,
   SCENES_MAX,
+  SCENE_PRESET_KEYS,
+  type ScenePresetInstallResponse,
+  type ScenePresetListResponse,
   type Scene,
   type SceneListResponse,
   type SceneRun,
@@ -41,6 +44,22 @@ export function registerSceneRoutes(app: FastifyInstance): void {
   const notFound = () => new ApiError('not_found', 'Scene not found');
 
   app.get<{ Reply: SceneListResponse }>(API_SCENES_PATH, async () => ({ scenes: scenes.list() }));
+
+  app.get<{ Reply: ScenePresetListResponse }>(`${API_SCENES_PATH}/presets`, async () => ({
+    presets: app.scenes.presets(),
+  }));
+
+  app.post<{ Params: { key: string }; Reply: ScenePresetInstallResponse }>(
+    `${API_SCENES_PATH}/presets/:key/install`,
+    async (request, reply) => {
+      const key = SCENE_PRESET_KEYS.find((candidate) => candidate === request.params.key);
+      if (!key) throw new ApiError('not_found', 'Preset not found');
+      if (scenes.count() >= SCENES_MAX) {
+        throw new ApiError('invalid_params', `Too many scenes (maximum ${SCENES_MAX})`);
+      }
+      return reply.status(201).send(app.scenes.install(key));
+    },
+  );
 
   app.post<{ Reply: Scene }>(API_SCENES_PATH, async (request, reply) => {
     const input = parseOrThrow(createBody, request.body, 'body');

@@ -5,6 +5,8 @@ import type {
   SceneStep,
   SceneStepResult,
 } from '@home-control/shared';
+import type { ScenePreset, ScenePresetInstallResponse, ScenePresetKey } from '@home-control/shared';
+import { TEMPLATES, resolvePreset } from './presets.js';
 import { ApiError, toErrorPayload } from '../errors.js';
 import { validateParams } from '../devices/actions/params.js';
 import type { DeviceActionService } from '../devices/actions/service.js';
@@ -32,6 +34,40 @@ export class SceneService {
 
   constructor(private readonly options: SceneServiceOptions) {
     this.stepTimeoutMs = options.stepTimeoutMs ?? 15_000;
+  }
+
+  private installedNames(): Set<string> {
+    return new Set(this.options.scenes.list().map((s) => s.name.toLocaleLowerCase('pt-BR')));
+  }
+
+  /** The templates as they resolve against the devices connected right now. */
+  presets(): ScenePreset[] {
+    const devices = this.options.registry.list();
+    const installed = this.installedNames();
+    return TEMPLATES.map((template) => resolvePreset(template, devices, installed));
+  }
+
+  /** Creates an ordinary scene from a template. Unavailable steps are left out and reported, never faked. */
+  install(key: ScenePresetKey): ScenePresetInstallResponse {
+    const preset = this.presets().find((p) => p.key === key);
+    if (!preset) throw new ApiError('not_found', 'Preset not found');
+    if (preset.installed) {
+      throw new ApiError('conflict', `A scene named "${preset.name}" already exists`);
+    }
+    const steps = preset.steps.flatMap((s) => (s.step ? [s.step] : []));
+    if (steps.length === 0) {
+      throw new ApiError(
+        'device_unavailable',
+        'Nenhum passo desta cena está disponível agora. Conecte os dispositivos e tente de novo.',
+      );
+    }
+    this.validateSteps(steps);
+    return {
+      scene: this.options.scenes.create({ name: preset.name, steps }),
+      omitted: preset.steps.flatMap((s) =>
+        s.step ? [] : [{ label: s.label, reason: s.reason ?? 'Indisponível.' }],
+      ),
+    };
   }
 
   /** Throws `invalid_params` naming the step when it cannot work with the device as it is now. */
