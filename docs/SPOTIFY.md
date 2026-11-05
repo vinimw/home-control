@@ -19,7 +19,9 @@ Two separate paths, on purpose:
 > Spotify with the household Premium account: that needs your own Spotify app and login. Spotify changes
 > its rules often (see "Things that may differ"); the first real connection is the real test. The direct
 > playback control (commands, transfer, playlist, accepted vs confirmed, 429 handling) was exercised the
-> same way against the simulated Spotify; **real playback on the household devices is still unverified**.
+> same way against the simulated Spotify, as were the library features (search paging, saved tracks,
+> playlist tracks, save/remove, play from results); **real playback and the real library on the household
+> account are still unverified**.
 
 ## Direct playback control (Spotify Web API)
 
@@ -75,6 +77,48 @@ Spotify apps start in development mode: only accounts added under **User Managem
 (otherwise reads and commands answer `403`, shown as "o Spotify recusou o acesso"), and the number of users
 and request rate are limited. Playback commands on a **restricted** device, or a device that is not
 currently online in Spotify, cannot work whatever the app does.
+
+## Your library: search, saved tracks, playlist tracks
+
+On the Music page (direct path) the **Biblioteca** section lets you search tracks, browse your saved
+("Curtidas") tracks, open the tracks of a playlist ("Ver faixas"), play a track and save or remove it. It
+needs a connection that includes `user-library-read` and `user-library-modify`; an older connection keeps
+working for everything else and the page asks you to connect again (**Ajustes > Spotify > Conectar de novo**,
+accept all permissions; **Testar conexão** lists what is missing).
+
+| Method       | Path                                    | Notes                                                          |
+| ------------ | --------------------------------------- | -------------------------------------------------------------- |
+| GET          | `/spotify/library/search?q&offset`      | Tracks. **10 per page** (Spotify's cap), `q` 1-100 chars       |
+| GET          | `/spotify/library/saved?offset&limit`   | Saved tracks, newest first (up to 50 per page)                 |
+| GET          | `/spotify/library/playlists/:id/tracks` | Tracks of a playlist you own or collaborate on                 |
+| PUT / DELETE | `/spotify/library/saved/:trackId`       | Save / remove; the answer is what Spotify reports afterwards   |
+| POST         | `/spotify/control/track`                | `{ trackId, contextUri?, deviceId? }` play a track (see below) |
+
+- **Pagination** uses `offset`; every page returns `total` and `nextOffset` (`null` on the last page) and the
+  page shows "Carregar mais" and "N de total". Search is debounced (450 ms), needs 2+ letters, and a newer
+  query replaces an older response.
+- **Saved status is Spotify's, not a guess.** Each page is enriched with `GET /me/library/contains` (40 URIs
+  per request, Spotify's limit); after a save/remove the API asks Spotify again and returns the observed
+  value, so the heart icon stays correct after a reload. If Spotify does not confirm a change the screen
+  says so.
+- **Play from results.** A track is played on the active output (`{ uris: [track] }`), or inside the
+  playlist when opened from one (`{ context_uri, offset }`, so playback continues with the next tracks),
+  with the same accepted-vs-confirmed result, error table and rate limiting as the other controls. With no
+  active output the button stays disabled and explains why.
+- Tracks Spotify marks unavailable (market restrictions, local files) are listed but cannot be played;
+  podcast episodes and removed items inside playlists are skipped.
+- **Playlists whose contents Spotify does not expose.** Since **February 2026** Spotify only returns the
+  items of playlists you **own or collaborate on**; for any other playlist (including many followed or
+  editorial ones) it answers `403`. The API maps that to `spotify_content_unavailable` and the screen says
+  "o Spotify só compartilha as faixas de playlists que você criou ou em que colabora". Playing the whole
+  playlist with **Tocar** still works.
+- **Spotify API changes this follows** (checked in the official changelog): search `limit` max 10; library
+  save/remove/check moved to `PUT|DELETE /me/library` and `GET /me/library/contains` (`uris=spotify:track:...`;
+  the old `/me/tracks` write endpoints were removed); playlist items moved to `/playlists/{id}/items` (the
+  playlist `tracks` object is now `items`, which the playlists list also reads). Spotify changes these
+  often: if a request starts failing, the changelog is the first place to look.
+- Rate limits, revocation and reconnect states are the same as for playback control (429 waits `Retry-After`,
+  a revoked authorization asks to connect again).
 
 ## Playback control through Home Assistant
 
@@ -212,8 +256,9 @@ the server and any device can see the data.
   is not.
 - **Least privilege.** Scopes requested: `user-read-private` (account and Premium status),
   `user-read-playback-state`, `playlist-read-private`, `playlist-read-collaborative` and
-  `user-modify-playback-state` (play, pause, skip, transfer, start a playlist). Nothing else: no library
-  changes, no streaming.
+  `user-modify-playback-state` (play, pause, skip, transfer, start a playlist), `user-library-read` and
+  `user-library-modify` (saved tracks: browse, save, remove). Nothing else: no follows, no playlist
+  edits, no streaming.
 
 ## API (all need a login; `POST`s also need the CSRF token)
 

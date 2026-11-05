@@ -10,6 +10,9 @@ import type {
 import {
   SPOTIFY_CLIENT_ID_PATTERN,
   SPOTIFY_CONTROL_SCOPE,
+  SPOTIFY_LIBRARY_SCOPES,
+  SPOTIFY_SEARCH_PAGE_MAX,
+  SPOTIFY_TRACKS_PAGE_MAX,
   spotifyRedirectUriProblem,
   type ApiErrorCode,
   type SpotifyConfigInput,
@@ -18,6 +21,9 @@ import {
   type SpotifyControlCommand,
   type SpotifyControlResult,
   type SpotifyControlState,
+  type SpotifySavedResponse,
+  type SpotifyTrack,
+  type SpotifyTrackPage,
   type SpotifyTestCheck,
   type SpotifyTestResult,
 } from '@home-control/shared';
@@ -56,6 +62,8 @@ export const SPOTIFY_SCOPES = [
   'playlist-read-collaborative',
   // Needed to play, pause, skip, transfer and start playlists through the Web API.
   SPOTIFY_CONTROL_SCOPE,
+  // Personal library: browse saved tracks and save/remove tracks.
+  ...SPOTIFY_LIBRARY_SCOPES,
 ] as const;
 
 export interface SpotifyServiceOptions {
@@ -486,7 +494,8 @@ export class SpotifyService {
           {
             id,
             name,
-            tracks: asNumber(asRecord(item.tracks).total),
+            // Spotify renamed the playlist `tracks` object to `items` (February 2026).
+            tracks: asNumber(asRecord(item.items).total) ?? asNumber(asRecord(item.tracks).total),
             owner: asString(asRecord(item.owner).display_name),
             imageUrl: asString(asRecord(images[0]).url),
           },
@@ -503,6 +512,127 @@ export class SpotifyService {
 
   async playback(): Promise<SpotifyPlaybackResponse> {
     return { playback: toPlayback(await this.authorized('/me/player')) };
+  }
+
+  // --- Personal library: search, saved tracks, playlist tracks, save/remove -----------------------------
+
+  private requireLibraryScopes(): void {
+    const granted = new Set((this.options.repo.get()?.scope ?? '').split(' '));
+    if (!SPOTIFY_LIBRARY_SCOPES.every((scope) => granted.has(scope))) {
+      throw new ApiError(
+        'spotify_scope_missing',
+        'The saved authorization cannot read or change your library. Connect Spotify again and accept all permissions.',
+      );
+    }
+  }
+
+  /** Track search. Spotify caps a page at 10 results, so the page size is clamped to that. */
+  async searchTracks(
+    query: string,
+    offset = 0,
+    limit = SPOTIFY_SEARCH_PAGE_MAX,
+  ): Promise<SpotifyTrackPage> {
+    this.requireLibraryScopes();
+    const size = Math.min(Math.max(limit, 1), SPOTIFY_SEARCH_PAGE_MAX);
+    const params = new URLSearchParams({
+      q: query,
+      type: 'track',
+      limit: String(size),
+      offset: String(offset),
+    });
+    const body = asRecord(asRecord(await this.authorized(`/search?${params}`)).tracks);
+    return this.trackPage(body, offset, size, (item) => item, false);
+  }
+
+  /** The user's saved ("liked") tracks, newest first. */
+  async savedTracks(offset = 0, limit = 20): Promise<SpotifyTrackPage> {
+    this.requireLibraryScopes();
+    const size = Math.min(Math.max(limit, 1), SPOTIFY_TRACKS_PAGE_MAX);
+    const body = asRecord(await this.authorized(`/me/tracks?limit=${size}&offset=${offset}`));
+    // Everything in this list is saved by definition; no extra request is needed.
+    return this.trackPage(body, offset, size, (item) => asRecord(item).track, true);
+  }
+
+  /**
+   * Tracks of a playlist. Since February 2026 Spotify only returns the items of playlists the user owns or
+   * collaborates on; for any other playlist the request is refused and the limitation is explained.
+   */
+  async playlistTracks(playlistId: string, offset = 0, limit = 20): Promise<SpotifyTrackPage> {
+    this.requireLibraryScopes();
+    const size = Math.min(Math.max(limit, 1), SPOTIFY_TRACKS_PAGE_MAX);
+    let body: Record<string, unknown>;
+    try {
+      body = asRecord(
+        await this.authorized(
+          `/playlists/${encodeURIComponent(playlistId)}/items?limit=${size}&offset=${offset}&additional_types=track`,
+        ),
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'spotify_forbidden') {
+        throw new ApiError(
+          'spotify_content_unavailable',
+          'Spotify only shares the tracks of playlists you created or collaborate on.',
+        );
+      }
+      throw error;
+    }
+    // `item` is the current field; `track` is the deprecated one.
+    return this.trackPage(
+      body,
+      offset,
+      size,
+      (entry) => {
+        const e = asRecord(entry);
+        return e.item ?? e.track;
+      },
+      false,
+    );
+  }
+
+  private async trackPage(
+    body: Record<string, unknown>,
+    offset: number,
+    size: number,
+    pick: (item: unknown) => unknown,
+    allSaved: boolean,
+  ): Promise<SpotifyTrackPage> {
+    const items = Array.isArray(body.items) ? body.items : [];
+    const tracks = items.flatMap((raw) => toTrack(pick(raw)));
+    const savedIds = allSaved
+      ? new Set(tracks.map((t) => t.id))
+      : await this.savedIds(tracks.map((t) => t.id));
+    const total = asNumber(body.total) ?? offset + items.length;
+    const next = offset + items.length;
+    return {
+      tracks: tracks.map((track) => ({ ...track, saved: savedIds.has(track.id) })),
+      total,
+      offset,
+      nextOffset: items.length > 0 && next < total ? next : null,
+    };
+  }
+
+  /** Which of these tracks are in the library, according to Spotify (40 per request, its documented limit). */
+  private async savedIds(ids: string[]): Promise<Set<string>> {
+    const saved = new Set<string>();
+    for (let i = 0; i < ids.length; i += 40) {
+      const chunk = ids.slice(i, i + 40);
+      const uris = chunk.map((id) => `spotify:track:${id}`).join(',');
+      const result = await this.authorized(`/me/library/contains?uris=${encodeURIComponent(uris)}`);
+      if (Array.isArray(result))
+        result.forEach((flag, index) => flag === true && saved.add(chunk[index]!));
+    }
+    return saved;
+  }
+
+  /** Saves or removes one track, then asks Spotify again so the answer is what it actually reports. */
+  async setTrackSaved(trackId: string, save: boolean): Promise<SpotifySavedResponse> {
+    this.requireLibraryScopes();
+    const uri = `spotify:track:${trackId}`;
+    await this.authorized(`/me/library?uris=${encodeURIComponent(uri)}`, {
+      method: save ? 'PUT' : 'DELETE',
+    });
+    const saved = (await this.savedIds([trackId])).has(trackId);
+    return { trackId, saved };
   }
 
   // --- Playback control through the Web API -----------------------------------------------------------
@@ -590,6 +720,30 @@ export class SpotifyService {
       `/me/player/play${query}`,
       { context_uri: uri },
       (state) => state.playback?.contextUri === uri && state.playback.isPlaying,
+    );
+  }
+
+  /** Plays one track on the active (or chosen) output, optionally inside a playlist context. */
+  async playTrack(
+    trackId: string,
+    contextUri?: string,
+    deviceId?: string,
+  ): Promise<SpotifyControlResult> {
+    const before = await this.prepareControl(deviceId);
+    if (!deviceId && !before.devices.some((d) => d.isActive)) {
+      throw new ApiError(
+        'spotify_no_device',
+        'No active Spotify output. Pick an available device first.',
+      );
+    }
+    const uri = `spotify:track:${trackId}`;
+    const query = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
+    const body = contextUri ? { context_uri: contextUri, offset: { uri } } : { uris: [uri] };
+    return this.runControl(
+      'PUT',
+      `/me/player/play${query}`,
+      body,
+      (state) => state.playback?.trackId === trackId && state.playback.isPlaying,
     );
   }
 
@@ -946,6 +1100,31 @@ function toPlayback(body: unknown): SpotifyPlayback | null {
     track,
     progressMs: asNumber(data.progress_ms),
   };
+}
+
+/** A playable-looking track; episodes, `null` entries (removed items) and malformed rows are skipped. */
+function toTrack(raw: unknown): Array<Omit<SpotifyTrack, 'saved'>> {
+  const t = asRecord(raw);
+  const id = asString(t.id);
+  const name = asString(t.name);
+  if (!id || name === null || (asString(t.type) ?? 'track') !== 'track') return [];
+  const images = Array.isArray(asRecord(t.album).images)
+    ? (asRecord(t.album).images as unknown[])
+    : [];
+  return [
+    {
+      id,
+      uri: `spotify:track:${id}`,
+      name,
+      artists: (Array.isArray(t.artists) ? t.artists : [])
+        .map((artist) => asString(asRecord(artist).name))
+        .filter((n): n is string => n !== null),
+      album: asString(asRecord(t.album).name),
+      durationMs: asNumber(t.duration_ms) ?? 0,
+      imageUrl: asString(asRecord(images[images.length - 1]).url),
+      playable: t.is_playable !== false && t.is_local !== true,
+    },
+  ];
 }
 
 function toDevice(raw: unknown): SpotifyDevice[] {

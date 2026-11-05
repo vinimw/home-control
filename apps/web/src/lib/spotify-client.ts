@@ -27,6 +27,8 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   spotify_premium_required: 'O Spotify só permite controlar a reprodução com Premium.',
   spotify_scope_missing:
     'Falta a permissão de controle. Em Ajustes > Spotify, use "Conectar de novo" e aceite todas as permissões.',
+  spotify_content_unavailable:
+    'O Spotify só compartilha as faixas de playlists que você criou ou em que colabora.',
   conflict: 'Outro comando do Spotify ainda está em andamento.',
   csrf_invalid: 'A solicitação foi recusada por segurança. Recarregue a página.',
 };

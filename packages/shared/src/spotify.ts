@@ -214,3 +214,48 @@ export interface SpotifyControlResult {
   status: 'confirmed' | 'accepted';
   state: SpotifyControlState;
 }
+
+/** Permissions for the personal library: read saved tracks and save/remove tracks. */
+export const SPOTIFY_LIBRARY_SCOPES = ['user-library-read', 'user-library-modify'] as const;
+
+export const API_SPOTIFY_LIBRARY_PATH = `${API_SPOTIFY_PATH}/library`;
+/** Spotify caps a search page at 10 results (apps in development mode). */
+export const SPOTIFY_SEARCH_PAGE_MAX = 10;
+export const SPOTIFY_TRACKS_PAGE_MAX = 50;
+
+export interface SpotifyTrack {
+  id: string;
+  /** `spotify:track:<id>`. */
+  uri: string;
+  name: string;
+  artists: string[];
+  album: string | null;
+  durationMs: number;
+  imageUrl: string | null;
+  /** Spotify says it cannot be played (unavailable in the market, local file...). */
+  playable: boolean;
+  /** Whether the track is in the user's Spotify library, as Spotify reports it. */
+  saved: boolean;
+}
+
+/** A page of tracks. `nextOffset` is `null` on the last page. */
+export interface SpotifyTrackPage {
+  tracks: SpotifyTrack[];
+  total: number;
+  offset: number;
+  nextOffset: number | null;
+}
+
+/** `PUT`/`DELETE /spotify/library/saved/:trackId`: `saved` is what Spotify reports afterwards. */
+export interface SpotifySavedResponse {
+  trackId: string;
+  saved: boolean;
+}
+
+/** `POST /spotify/control/track` */
+export interface SpotifyPlayTrackInput {
+  trackId: string;
+  /** Play inside this playlist (`spotify:playlist:<id>`) so playback continues with its next tracks. */
+  contextUri?: string;
+  deviceId?: string;
+}

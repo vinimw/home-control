@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import type { SpotifyPlaylistsResponse } from '@home-control/shared';
+import type { SpotifyPlaylist, SpotifyPlaylistsResponse } from '@home-control/shared';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { spotifyRequest, type SpotifyResult } from '@/lib/spotify-client';
 
@@ -13,10 +13,12 @@ interface Props {
   /** Why playing is not possible now (shown once above the list). */
   hint: string;
   onPlay: (playlistId: string) => void;
+  /** Shows the tracks of a playlist (direct path only). */
+  onOpen?: (playlist: SpotifyPlaylist) => void;
 }
 
 /** The account's playlists (read through the direct connection) with a play button each. */
-export function PlaylistList({ canPlay, busy, hint, onPlay }: Props) {
+export function PlaylistList({ canPlay, busy, hint, onPlay, onOpen }: Props) {
   const [playlists, setPlaylists] = useState<SpotifyResult<SpotifyPlaylistsResponse> | null>(null);
   const load = useCallback(async () => {
     setPlaylists(await spotifyRequest<SpotifyPlaylistsResponse>('playlists'));
@@ -66,6 +68,11 @@ export function PlaylistList({ canPlay, busy, hint, onPlay }: Props) {
                     {playlist.owner ? ` · ${playlist.owner}` : ''}
                   </p>
                 </div>
+                {onOpen ? (
+                  <Button variant="ghost" size="sm" onClick={() => onOpen(playlist)}>
+                    Ver faixas
+                  </Button>
+                ) : null}
                 <Button
                   variant="outline"
                   size="sm"

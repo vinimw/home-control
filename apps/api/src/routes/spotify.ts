@@ -3,6 +3,11 @@ import type { FastifyInstance } from 'fastify';
 import {
   API_SPOTIFY_PATH,
   API_SPOTIFY_CONTROL_PATH,
+  API_SPOTIFY_LIBRARY_PATH,
+  SPOTIFY_SEARCH_PAGE_MAX,
+  SPOTIFY_TRACKS_PAGE_MAX,
+  type SpotifySavedResponse,
+  type SpotifyTrackPage,
   API_SPOTIFY_PLAYER_PATH,
   type SpotifyControlResult,
   type SpotifyControlState,
@@ -33,6 +38,42 @@ const commandBody = z
 const transferBody = z.object({ deviceId, play: z.boolean().default(true) }).strict();
 const playlistBody = z
   .object({ playlistId: z.string().regex(/^[A-Za-z0-9]{1,64}$/), deviceId: deviceId.optional() })
+  .strict();
+
+const spotifyId = z.string().regex(/^[A-Za-z0-9]{1,64}$/);
+const pageQuery = z.object({
+  offset: z.coerce.number().int().min(0).max(10_000).default(0),
+  limit: z.coerce.number().int().min(1).max(SPOTIFY_TRACKS_PAGE_MAX).default(20),
+});
+const searchQuery = z
+  .object({
+    q: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .regex(/^[^\p{Cc}]*$/u),
+    offset: z.coerce.number().int().min(0).max(1000).default(0),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(SPOTIFY_SEARCH_PAGE_MAX)
+      .default(SPOTIFY_SEARCH_PAGE_MAX),
+  })
+  .strict();
+const trackBody = z
+  .object({
+    trackId: spotifyId,
+    contextUri: z
+      .string()
+      .regex(/^spotify:playlist:[A-Za-z0-9]{1,64}$/)
+      .optional(),
+    deviceId: z
+      .string()
+      .regex(/^[A-Za-z0-9]{1,64}$/)
+      .optional(),
+  })
   .strict();
 
 const callbackQuery = z
@@ -108,6 +149,40 @@ export function registerSpotifyRoutes(app: FastifyInstance): void {
     app.spotify.playback(),
   );
 
+  // Personal library through the Spotify Web API: search, saved tracks, playlist tracks, save/remove.
+  const query = <T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> => {
+    const parsed = schema.safeParse(value);
+    if (!parsed.success) throw new ApiError('bad_request', 'Invalid query');
+    return parsed.data;
+  };
+  app.get<{ Reply: SpotifyTrackPage }>(`${API_SPOTIFY_LIBRARY_PATH}/search`, async (request) => {
+    const { q, offset, limit } = query(searchQuery, request.query);
+    return app.spotify.searchTracks(q, offset, limit);
+  });
+  app.get<{ Reply: SpotifyTrackPage }>(`${API_SPOTIFY_LIBRARY_PATH}/saved`, async (request) => {
+    const { offset, limit } = query(pageQuery.strict(), request.query);
+    return app.spotify.savedTracks(offset, limit);
+  });
+  app.get<{ Params: { id: string }; Reply: SpotifyTrackPage }>(
+    `${API_SPOTIFY_LIBRARY_PATH}/playlists/:id/tracks`,
+    async (request) => {
+      const id = query(spotifyId, request.params.id);
+      const { offset, limit } = query(pageQuery.strict(), request.query);
+      return app.spotify.playlistTracks(id, offset, limit);
+    },
+  );
+  for (const [method, save] of [
+    ['PUT', true],
+    ['DELETE', false],
+  ] as const) {
+    app.route<{ Params: { id: string }; Reply: SpotifySavedResponse }>({
+      method,
+      url: `${API_SPOTIFY_LIBRARY_PATH}/saved/:id`,
+      handler: async (request) =>
+        app.spotify.setTrackSaved(query(spotifyId, request.params.id), save),
+    });
+  }
+
   // Direct playback control through the Spotify Web API (no Home Assistant needed).
   app.get<{ Reply: SpotifyControlState }>(`${API_SPOTIFY_CONTROL_PATH}/state`, async () =>
     app.spotify.controlState(),
@@ -124,6 +199,13 @@ export function registerSpotifyRoutes(app: FastifyInstance): void {
     async (request) => {
       const { deviceId: target, play } = parseBody(transferBody, request.body);
       return app.spotify.transfer(target, play);
+    },
+  );
+  app.post<{ Reply: SpotifyControlResult }>(
+    `${API_SPOTIFY_CONTROL_PATH}/track`,
+    async (request) => {
+      const { trackId, contextUri, deviceId: target } = parseBody(trackBody, request.body);
+      return app.spotify.playTrack(trackId, contextUri, target);
     },
   );
   app.post<{ Reply: SpotifyControlResult }>(

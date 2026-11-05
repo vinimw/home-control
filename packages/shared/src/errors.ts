@@ -35,6 +35,8 @@ export type ApiErrorCode =
   | 'spotify_premium_required'
   /** The saved authorization lacks the playback-control permission: connect again. */
   | 'spotify_scope_missing'
+  /** Spotify does not expose this content (for example the tracks of a playlist you do not own). */
+  | 'spotify_content_unavailable'
   | 'internal_error';
 
 export interface ApiErrorPayload {
