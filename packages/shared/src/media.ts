@@ -1,6 +1,7 @@
 export const API_MEDIA_ACTIVITY_PATH = '/media/activity';
 
-export type MediaSourceKind = 'tv' | 'echo';
+/** `spotify` is never returned by the API: the browser adds it from the direct Spotify connection. */
+export type MediaSourceKind = 'tv' | 'echo' | 'spotify';
 
 /**
  * - `playing` / `paused`: the device reports active or paused playback.

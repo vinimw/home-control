@@ -34,7 +34,7 @@ export function AppHeader() {
         ) : (
           <span className="flex min-w-0 items-center gap-2 pl-2 font-semibold md:invisible">
             <House aria-hidden className="size-5 shrink-0 text-primary" />
-            <span className="truncate">Home Control</span>
+            <span className="hidden truncate sm:inline">Home Control</span>
           </span>
         )}
         <div className="flex min-w-0 shrink items-center">

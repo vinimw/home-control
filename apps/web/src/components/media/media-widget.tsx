@@ -2,12 +2,15 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Music2, Pause, Play, SkipBack, SkipForward, Tv } from 'lucide-react';
+import { LoaderCircle, Music2, Pause, Play, SkipBack, SkipForward, Tv } from 'lucide-react';
 import type { MediaPlaybackState, MediaSource } from '@home-control/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { executeDeviceCommand } from '@/lib/devices-client';
 import { cn } from '@/lib/utils';
+import { derivePlayer } from '@/components/spotify/player-model';
+import { getSpotifyControlSnapshot } from '@/components/spotify/spotify-control-store';
+import { useSpotifyControl } from '@/components/spotify/use-spotify-control';
 import { useMediaActivity } from './use-media-activity';
 
 const STATE_LABEL: Record<MediaPlaybackState, string> = {
@@ -38,6 +41,50 @@ export function pickPrimary(sources: MediaSource[], manualId: string | null): Me
   );
 }
 
+const SPOTIFY_ID = 'spotify';
+const SPOTIFY_COMMAND = {
+  previous_track: 'previous',
+  next_track: 'next',
+  play: 'play',
+  pause: 'pause',
+} as const;
+
+/**
+ * The Spotify session as a header source, from the shared direct-connection state. It exists only for a known
+ * track on an active output of an account we may control: otherwise (no session, disconnected, no Premium or
+ * permission) the header shows no Spotify controls at all.
+ */
+function spotifySource(sp: ReturnType<typeof useSpotifyControl>): MediaSource | null {
+  const { data, changedAt } = sp;
+  if (!data || !data.canControl || data.premium === false) return null;
+  const model = derivePlayer(data);
+  const track = model.playback?.track;
+  if ((model.status !== 'playing' && model.status !== 'paused') || !track || !model.active)
+    return null;
+  const commands = [
+    model.can('skipping_prev') ? 'previous_track' : null,
+    model.status === 'playing'
+      ? model.can('pausing')
+        ? 'pause'
+        : null
+      : model.can('resuming')
+        ? 'play'
+        : null,
+    model.can('skipping_next') ? 'next_track' : null,
+  ].filter((c): c is string => c !== null);
+  return {
+    deviceId: SPOTIFY_ID,
+    name: `Spotify · ${model.active.name}`,
+    kind: 'spotify',
+    state: model.status === 'playing' ? 'playing' : 'paused',
+    title: track.name,
+    artist: track.artists.join(', ') || null,
+    app: null,
+    lastChanged: changedAt ? new Date(changedAt).toISOString() : null,
+    commands,
+  };
+}
+
 const describe = (s: MediaSource): string =>
   [s.title, s.artist].filter(Boolean).join(' · ') ||
   (s.kind === 'tv' && s.app ? `App: ${s.app}` : STATE_LABEL[s.state]);
@@ -56,6 +103,8 @@ function Icon({ kind }: { kind: MediaSource['kind'] }) {
  */
 export function MediaWidget() {
   const { data, stale, refresh } = useMediaActivity();
+  const sp = useSpotifyControl();
+  const [toast, setToast] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [manualId, setManualId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -85,11 +134,29 @@ export function MediaWidget() {
     };
   }, [open]);
 
-  const sources = data?.sources ?? [];
-  if (data === null || sources.length === 0) return null;
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const spotify = spotifySource(sp);
+  const sources = [...(data?.sources ?? []), ...(spotify ? [spotify] : [])];
+  if (sources.length === 0) return null;
   const primary = pickPrimary(sources, manualId);
+  const inline = primary?.kind === 'spotify';
+  const pending = sp.busy || busy !== null;
 
   async function send(source: MediaSource, command: string) {
+    if (source.kind === 'spotify') {
+      // Direct Spotify command: the result replaces the shared state, so the header and Music stay in sync.
+      if (sp.busy) return;
+      await sp.command(SPOTIFY_COMMAND[command as keyof typeof SPOTIFY_COMMAND]);
+      const notice = getSpotifyControlSnapshot().notice;
+      setFeedback(notice);
+      setToast(notice);
+      return;
+    }
     if (busy) return;
     setBusy(`${source.deviceId}:${command}`);
     setFeedback(null);
@@ -106,15 +173,24 @@ export function MediaWidget() {
   }
 
   return (
-    <div ref={root} className="relative min-w-0">
+    <div ref={root} className="relative flex min-w-0 items-center">
       <button
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-11 max-w-[11rem] min-w-0 items-center gap-1.5 rounded-md px-2 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:max-w-xs"
+        className={cn(
+          'flex h-11 min-w-0 items-center gap-1.5 rounded-md px-2 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:max-w-xs',
+          inline ? 'flex-1' : 'max-w-[11rem]',
+        )}
       >
-        {primary ? <Icon kind={primary.kind} /> : <Music2 aria-hidden className="size-4" />}
+        {primary ? (
+          <span className={cn(inline && 'hidden sm:inline-flex')}>
+            <Icon kind={primary.kind} />
+          </span>
+        ) : (
+          <Music2 aria-hidden className="size-4" />
+        )}
         <span className="truncate">
           <span className="sr-only">Mídia: </span>
           {primary ? describe(primary) : 'Nada tocando'}
@@ -126,6 +202,58 @@ export function MediaWidget() {
           />
         ) : null}
       </button>
+
+      {inline && primary ? (
+        <div role="group" aria-label="Controles do Spotify" className="flex shrink-0 items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10 md:size-11"
+            aria-label="Anterior"
+            disabled={!primary.commands.includes('previous_track') || pending}
+            onClick={() => void send(primary, 'previous_track')}
+          >
+            <SkipBack aria-hidden />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10 md:size-11"
+            aria-label={primary.state === 'playing' ? 'Pausar' : 'Tocar'}
+            aria-busy={sp.busy}
+            disabled={
+              !primary.commands.includes(primary.state === 'playing' ? 'pause' : 'play') || pending
+            }
+            onClick={() => void send(primary, primary.state === 'playing' ? 'pause' : 'play')}
+          >
+            {sp.busy ? (
+              <LoaderCircle aria-hidden className="animate-spin motion-reduce:animate-none" />
+            ) : primary.state === 'playing' ? (
+              <Pause aria-hidden />
+            ) : (
+              <Play aria-hidden />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10 md:size-11"
+            aria-label="Próxima"
+            disabled={!primary.commands.includes('next_track') || pending}
+            onClick={() => void send(primary, 'next_track')}
+          >
+            <SkipForward aria-hidden />
+          </Button>
+        </div>
+      ) : null}
+      {toast && !open ? (
+        <p
+          role="status"
+          className="absolute top-full right-0 z-40 mt-1 max-w-[18rem] rounded-md border bg-background p-2 text-xs shadow-lg"
+        >
+          {toast}
+        </p>
+      ) : null}
 
       {open ? (
         <div
@@ -142,7 +270,7 @@ export function MediaWidget() {
           <ul className="flex flex-col gap-3">
             {sources.map((source) => {
               const can = (c: string) =>
-                source.commands.includes(c) && source.state !== 'unavailable' && busy === null;
+                source.commands.includes(c) && source.state !== 'unavailable' && !pending;
               const isPrimary = source.deviceId === primary?.deviceId;
               const music = source.kind !== 'tv';
               return (
