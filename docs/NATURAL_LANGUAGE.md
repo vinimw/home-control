@@ -12,12 +12,12 @@ decide _how_ a sentence such as "liga a TV" or "executa a cena Boa noite" could 
 The language layer is a **picker over an existing allowlist**, not a new way to execute. Execution stays on
 the paths that already validate, confirm and audit everything:
 
-| Allowlisted target  | Existing execution path                          | Already guarantees                                      |
-| ------------------- | ------------------------------------------------ | ------------------------------------------------------- |
-| Scene               | `POST /scenes/:id/run`                           | Steps validated again at run time; per-step results     |
-| Device command      | `POST /devices/:id/actions`                      | Only commands the device advertises; params validated   |
-| Spotify player      | `POST /spotify/player/{command,source,playlist}` | Capabilities from Home Assistant; accepted vs confirmed |
-| Saved Alexa command | `POST /alexa/commands/:id/execute`               | Stored text only, sent on an explicit action            |
+| Allowlisted target  | Existing execution path                                        | Already guarantees                                    |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------- |
+| Scene               | `POST /scenes/:id/run`                                         | Steps validated again at run time; per-step results   |
+| Device command      | `POST /devices/:id/actions`                                    | Only commands the device advertises; params validated |
+| Spotify player      | `POST /spotify/control/{command,transfer,playlist,track,seek}` | Spotify's `disallows`; accepted vs confirmed          |
+| Saved Alexa command | `POST /alexa/commands/:id/execute`                             | Stored text only, sent on an explicit action          |
 
 ## Intents (closed set)
 

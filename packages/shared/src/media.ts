@@ -1,6 +1,6 @@
 export const API_MEDIA_ACTIVITY_PATH = '/media/activity';
 
-export type MediaSourceKind = 'tv' | 'echo' | 'spotify';
+export type MediaSourceKind = 'tv' | 'echo';
 
 /**
  * - `playing` / `paused`: the device reports active or paused playback.

@@ -14,7 +14,7 @@ Browser (apps/web, Next.js)
 apps/api (Fastify)  ── SQLite (settings, rooms, aliases, history)
         │  REST + WebSocket (backend only)
         ▼
-Home Assistant (separate macOS VM)  ──►  Samsung TV · Echo Show 8 · Spotify
+Home Assistant (separate macOS VM)  ──►  Samsung TV · Echo Show 8
 ```
 
 - **apps/web**: UI only. Never talks to Home Assistant or third parties directly.
@@ -60,8 +60,9 @@ on loopback. See [SECURITY.md](SECURITY.md).
 
 ## Spotify
 
-OAuth (PKCE) happens on the API; tokens are encrypted at rest and never reach the browser. The first step is
-read-only: account, devices, playlists, playback state. See [SPOTIFY.md](SPOTIFY.md).
+Spotify is reached **directly** (official Web API, OAuth with PKCE) and not through Home Assistant. It happens
+on the API: tokens are encrypted at rest and never reach the browser. It covers the account, playback state
+and control, outputs, search, saved tracks and playlists. See [SPOTIFY.md](SPOTIFY.md).
 
 ## Web app
 

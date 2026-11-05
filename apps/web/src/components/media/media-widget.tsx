@@ -243,15 +243,7 @@ export function MediaWidget() {
             {feedback}
           </p>
           <p className="text-xs text-muted-foreground">
-            Estado lido pelo Home Assistant (atualiza a cada poucos segundos). A tela Música lê
-            direto do Spotify e pode mostrar algo diferente por alguns instantes.{' '}
-            <Link
-              href="/music"
-              onClick={() => setOpen(false)}
-              className="underline underline-offset-2"
-            >
-              Abrir Música
-            </Link>
+            Estado lido pelo Home Assistant (atualiza a cada poucos segundos).
           </p>
         </div>
       ) : null}

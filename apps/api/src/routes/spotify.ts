@@ -8,11 +8,8 @@ import {
   SPOTIFY_TRACKS_PAGE_MAX,
   type SpotifySavedResponse,
   type SpotifyTrackPage,
-  API_SPOTIFY_PLAYER_PATH,
   type SpotifyControlResult,
   type SpotifyControlState,
-  type SpotifyPlayerResult,
-  type SpotifyPlayerState,
   type SpotifyConfigResponse,
   type SpotifyConnectResponse,
   type SpotifyTestResult,
@@ -22,7 +19,6 @@ import {
   type SpotifyStatus,
 } from '@home-control/shared';
 import { ApiError } from '../errors.js';
-import { playerCommandBody, playerPlaylistBody, playerSourceBody } from '../spotify/ha-player.js';
 
 const configBody = z
   .object({
@@ -218,20 +214,6 @@ export function registerSpotifyRoutes(app: FastifyInstance): void {
       const { playlistId, deviceId: target } = parseBody(playlistBody, request.body);
       return app.spotify.playPlaylist(playlistId, target);
     },
-  );
-
-  // Playback control through Home Assistant's Spotify integration, not a direct Spotify connection.
-  app.get<{ Reply: SpotifyPlayerState }>(API_SPOTIFY_PLAYER_PATH, async () =>
-    app.spotifyPlayer.state(),
-  );
-  app.post<{ Reply: SpotifyPlayerResult }>(`${API_SPOTIFY_PLAYER_PATH}/command`, async (request) =>
-    app.spotifyPlayer.command(parseBody(playerCommandBody, request.body).command),
-  );
-  app.post<{ Reply: SpotifyPlayerResult }>(`${API_SPOTIFY_PLAYER_PATH}/source`, async (request) =>
-    app.spotifyPlayer.selectSource(parseBody(playerSourceBody, request.body).source),
-  );
-  app.post<{ Reply: SpotifyPlayerResult }>(`${API_SPOTIFY_PLAYER_PATH}/playlist`, async (request) =>
-    app.spotifyPlayer.playPlaylist(parseBody(playerPlaylistBody, request.body).playlistId),
   );
 }
 
