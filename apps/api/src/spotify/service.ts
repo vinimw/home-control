@@ -696,6 +696,25 @@ export class SpotifyService {
     );
   }
 
+  /** Jumps to a position in the current track. Only offered when Spotify does not disallow seeking. */
+  async seek(positionMs: number): Promise<SpotifyControlResult> {
+    const before = await this.prepareControl();
+    if (!before.playback) {
+      throw new ApiError('spotify_no_device', 'Nothing is playing, so there is nothing to seek.');
+    }
+    if (before.playback.disallowed.includes('seeking')) {
+      throw new ApiError('unsupported_action', 'Spotify does not allow seeking in this track.');
+    }
+    const target = Math.max(0, Math.round(positionMs));
+    return this.runControl(
+      'PUT',
+      `/me/player/seek?position_ms=${target}`,
+      undefined,
+      // Progress keeps advancing while we read it back, so allow a few seconds of drift.
+      (state) => Math.abs((state.playback?.progressMs ?? -1e9) - target) < 4000,
+    );
+  }
+
   /** Moves playback to another available output. `play` keeps or starts playing there. */
   async transfer(deviceId: string, play: boolean): Promise<SpotifyControlResult> {
     await this.prepareControl(deviceId);
@@ -1075,6 +1094,15 @@ interface CallInit {
   command?: boolean;
 }
 
+/** A mid-size artwork (about 300 px) from Spotify's list, which is ordered largest first. */
+function pickImage(raw: unknown): string | null {
+  const images = (Array.isArray(raw) ? raw : []).map(asRecord).filter((i) => asString(i.url));
+  const best =
+    images.find((i) => (asNumber(i.width) ?? 0) <= 400 && (asNumber(i.width) ?? 0) >= 200) ??
+    images[Math.floor(images.length / 2)];
+  return best ? asString(best.url) : null;
+}
+
 /** `null` (HTTP 204) means nothing is playing on any device. */
 function toPlayback(body: unknown): SpotifyPlayback | null {
   if (body === null) return null;
@@ -1088,6 +1116,7 @@ function toPlayback(body: unknown): SpotifyPlayback | null {
           .filter((name): name is string => name !== null),
         album: asString(asRecord(item.album).name),
         durationMs: asNumber(item.duration_ms) ?? 0,
+        imageUrl: pickImage(asRecord(item.album).images),
       }
     : null;
   const disallows = asRecord(asRecord(data.actions).disallows);

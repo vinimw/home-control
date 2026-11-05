@@ -14,7 +14,7 @@ export async function GET(request: Request, { params }: Context) {
 
 export async function POST(request: Request, { params }: Context) {
   const { op } = await params;
-  if (!['command', 'transfer', 'playlist', 'track'].includes(op)) {
+  if (!['command', 'transfer', 'playlist', 'track', 'seek'].includes(op)) {
     return errorResponse('not_found', 'Not found', 404);
   }
   return relayJson(request, `${API_SPOTIFY_CONTROL_PATH}/${op}`, 'POST');
