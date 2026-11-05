@@ -2,7 +2,10 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import {
   API_SPOTIFY_PATH,
+  API_SPOTIFY_CONTROL_PATH,
   API_SPOTIFY_PLAYER_PATH,
+  type SpotifyControlResult,
+  type SpotifyControlState,
   type SpotifyPlayerResult,
   type SpotifyPlayerState,
   type SpotifyConfigResponse,
@@ -21,6 +24,15 @@ const configBody = z
     clientId: z.string().trim().min(1).max(128),
     redirectUri: z.string().trim().min(1).max(300),
   })
+  .strict();
+
+const deviceId = z.string().regex(/^[A-Za-z0-9]{1,64}$/);
+const commandBody = z
+  .object({ command: z.enum(['play', 'pause', 'next', 'previous']), deviceId: deviceId.optional() })
+  .strict();
+const transferBody = z.object({ deviceId, play: z.boolean().default(true) }).strict();
+const playlistBody = z
+  .object({ playlistId: z.string().regex(/^[A-Za-z0-9]{1,64}$/), deviceId: deviceId.optional() })
   .strict();
 
 const callbackQuery = z
@@ -96,7 +108,33 @@ export function registerSpotifyRoutes(app: FastifyInstance): void {
     app.spotify.playback(),
   );
 
-  // Playback control goes through Home Assistant's Spotify integration, not a direct Spotify connection.
+  // Direct playback control through the Spotify Web API (no Home Assistant needed).
+  app.get<{ Reply: SpotifyControlState }>(`${API_SPOTIFY_CONTROL_PATH}/state`, async () =>
+    app.spotify.controlState(),
+  );
+  app.post<{ Reply: SpotifyControlResult }>(
+    `${API_SPOTIFY_CONTROL_PATH}/command`,
+    async (request) => {
+      const { command, deviceId: target } = parseBody(commandBody, request.body);
+      return app.spotify.control(command, target);
+    },
+  );
+  app.post<{ Reply: SpotifyControlResult }>(
+    `${API_SPOTIFY_CONTROL_PATH}/transfer`,
+    async (request) => {
+      const { deviceId: target, play } = parseBody(transferBody, request.body);
+      return app.spotify.transfer(target, play);
+    },
+  );
+  app.post<{ Reply: SpotifyControlResult }>(
+    `${API_SPOTIFY_CONTROL_PATH}/playlist`,
+    async (request) => {
+      const { playlistId, deviceId: target } = parseBody(playlistBody, request.body);
+      return app.spotify.playPlaylist(playlistId, target);
+    },
+  );
+
+  // Playback control through Home Assistant's Spotify integration, not a direct Spotify connection.
   app.get<{ Reply: SpotifyPlayerState }>(API_SPOTIFY_PLAYER_PATH, async () =>
     app.spotifyPlayer.state(),
   );

@@ -2,7 +2,8 @@ import type { ApiErrorBody, ApiErrorCode } from '@home-control/shared';
 import { csrfHeaders, redirectToLogin } from './csrf';
 
 export type SpotifyResult<T> =
-  { ok: true; data: T } | { ok: false; code: ApiErrorCode | null; message: string };
+  | { ok: true; data: T }
+  | { ok: false; code: ApiErrorCode | null; message: string; retryAfter?: number };
 
 /** pt-BR explanations for what can go wrong with Spotify. Never shows raw Spotify details. */
 const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
@@ -20,6 +21,13 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   not_found: 'O player do Spotify não foi encontrado no Home Assistant.',
   disconnected: 'Sem conexão em tempo real com o Home Assistant.',
   invalid_params: 'Confira o Client ID e o callback informados.',
+  spotify_no_device:
+    'Nenhuma saída ativa no Spotify. Abra o Spotify em um aparelho ou escolha uma saída da lista.',
+  spotify_restricted: 'O Spotify não permite controlar essa saída agora.',
+  spotify_premium_required: 'O Spotify só permite controlar a reprodução com Premium.',
+  spotify_scope_missing:
+    'Falta a permissão de controle. Em Ajustes > Spotify, use "Conectar de novo" e aceite todas as permissões.',
+  conflict: 'Outro comando do Spotify ainda está em andamento.',
   csrf_invalid: 'A solicitação foi recusada por segurança. Recarregue a página.',
 };
 const FALLBACK = 'Não foi possível falar com o servidor.';
@@ -47,5 +55,11 @@ export async function spotifyRequest<T>(
   }
   const body = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null;
   const code = body?.error?.code ?? null;
-  return { ok: false, code, message: (code && MESSAGES[code]) || FALLBACK };
+  const retryAfter = body?.error?.retryAfter;
+  return {
+    ok: false,
+    code,
+    message: (code && MESSAGES[code]) || FALLBACK,
+    ...(typeof retryAfter === 'number' ? { retryAfter } : {}),
+  };
 }

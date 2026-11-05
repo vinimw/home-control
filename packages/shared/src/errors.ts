@@ -27,12 +27,22 @@ export type ApiErrorCode =
   | 'spotify_connect_required'
   /** Spotify refused the request (for example the account is not allowed to use this app). */
   | 'spotify_forbidden'
+  /** Spotify has no active output to receive the command. */
+  | 'spotify_no_device'
+  /** The chosen output cannot be controlled (restricted by its owner or by Spotify). */
+  | 'spotify_restricted'
+  /** Controlling playback needs a Premium account. */
+  | 'spotify_premium_required'
+  /** The saved authorization lacks the playback-control permission: connect again. */
+  | 'spotify_scope_missing'
   | 'internal_error';
 
 export interface ApiErrorPayload {
   code: ApiErrorCode;
   /** Human-readable, safe to display. Never contains secrets. */
   message: string;
+  /** Seconds to wait before trying again (rate limiting). */
+  retryAfter?: number;
 }
 
 /** Body of every non-2xx API response. */

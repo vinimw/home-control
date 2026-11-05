@@ -9,11 +9,15 @@ import type {
 } from '@home-control/shared';
 import {
   SPOTIFY_CLIENT_ID_PATTERN,
+  SPOTIFY_CONTROL_SCOPE,
   spotifyRedirectUriProblem,
   type ApiErrorCode,
   type SpotifyConfigInput,
   type SpotifyConfigResponse,
   type SpotifyConfigView,
+  type SpotifyControlCommand,
+  type SpotifyControlResult,
+  type SpotifyControlState,
   type SpotifyTestCheck,
   type SpotifyTestResult,
 } from '@home-control/shared';
@@ -42,14 +46,16 @@ export const DEFAULT_SPOTIFY_ENDPOINTS: SpotifyEndpoints = {
 };
 
 /**
- * Read-only permissions: account, playback state, playlists. Controlling playback needs
- * `user-modify-playback-state`; it is deliberately NOT requested until a feature uses it.
+ * Account, playback state and playlists (read), plus `user-modify-playback-state` so the Music player can
+ * control playback. Connections made before that permission existed must connect again to use it.
  */
 export const SPOTIFY_SCOPES = [
   'user-read-private',
   'user-read-playback-state',
   'playlist-read-private',
   'playlist-read-collaborative',
+  // Needed to play, pause, skip, transfer and start playlists through the Web API.
+  SPOTIFY_CONTROL_SCOPE,
 ] as const;
 
 export interface SpotifyServiceOptions {
@@ -63,6 +69,8 @@ export interface SpotifyServiceOptions {
   clock?: () => number;
   /** Per-request timeout. */
   timeoutMs?: number;
+  /** Delay before reading the state back after a command (tests use a short one). */
+  confirmDelayMs?: number;
 }
 
 interface PendingAuthorization {
@@ -88,6 +96,15 @@ const MAX_PENDING = 10;
 /** Refresh a little early so a token never expires mid-request. */
 const REFRESH_MARGIN_MS = 60_000;
 const PLAYLIST_PAGE = 50;
+const CONTROL_CACHE_MS = 2000;
+const CONTROL_CONFIRM_ATTEMPTS = 3;
+const EMPTY_STATE: SpotifyControlState = {
+  canControl: false,
+  premium: null,
+  playback: null,
+  devices: [],
+  observedAt: new Date(0).toISOString(),
+};
 
 const b64url = (buffer: Buffer): string => buffer.toString('base64url');
 
@@ -264,7 +281,7 @@ export class SpotifyService {
 
     let profile: unknown;
     try {
-      profile = await this.get('/me', tokens.accessToken);
+      profile = await this.call('/me', tokens.accessToken);
     } catch (error) {
       if (error instanceof TokenRejected) {
         throw new ApiError('upstream_error', 'Spotify rejected the new token.');
@@ -392,7 +409,7 @@ export class SpotifyService {
       status: missing.length === 0 ? 'ok' : 'failed',
       message:
         missing.length === 0
-          ? 'Todas as permissões de leitura foram concedidas.'
+          ? 'Todas as permissões (leitura e controle) foram concedidas.'
           : `Faltam permissões (${missing.join(', ')}). Use "Conectar de novo" e aceite todas.`,
     });
 
@@ -485,27 +502,162 @@ export class SpotifyService {
   }
 
   async playback(): Promise<SpotifyPlaybackResponse> {
-    const body = await this.authorized('/me/player');
-    if (body === null) return { playback: null }; // 204: nothing is playing
-    const data = asRecord(body);
-    const item = asRecord(data.item);
-    const track = asString(item.name)
-      ? {
-          name: asString(item.name)!,
-          artists: (Array.isArray(item.artists) ? item.artists : [])
-            .map((artist) => asString(asRecord(artist).name))
-            .filter((name): name is string => name !== null),
-          album: asString(asRecord(item.album).name),
-          durationMs: asNumber(item.duration_ms) ?? 0,
-        }
-      : null;
-    const playback: SpotifyPlayback = {
-      isPlaying: data.is_playing === true,
-      device: toDevice(data.device)[0] ?? null,
-      track,
-      progressMs: asNumber(data.progress_ms),
+    return { playback: toPlayback(await this.authorized('/me/player')) };
+  }
+
+  // --- Playback control through the Web API -----------------------------------------------------------
+  private controlCache: { at: number; value: SpotifyControlState } | null = null;
+  private controlInFlight: Promise<SpotifyControlState> | null = null;
+  private controlBusy = false;
+  /** No request leaves this server while Spotify asked us to wait (HTTP 429 + Retry-After). */
+  private limitedUntil = 0;
+
+  private get canControl(): boolean {
+    return (this.options.repo.get()?.scope ?? '').split(' ').includes(SPOTIFY_CONTROL_SCOPE);
+  }
+
+  /** Playback and outputs, from at most one pair of Web API requests per 2 seconds. */
+  controlState(): Promise<SpotifyControlState> {
+    if (this.controlCache && this.clock() - this.controlCache.at < CONTROL_CACHE_MS) {
+      return Promise.resolve(this.controlCache.value);
+    }
+    this.controlInFlight ??= this.readControlState().finally(() => {
+      this.controlInFlight = null;
+    });
+    return this.controlInFlight;
+  }
+
+  private async readControlState(): Promise<SpotifyControlState> {
+    const [player, devices] = await Promise.all([
+      this.authorized('/me/player'),
+      this.authorized('/me/player/devices'),
+    ]);
+    const list = asRecord(devices).devices;
+    const product = this.options.repo.get()?.product ?? null;
+    const value: SpotifyControlState = {
+      canControl: this.canControl,
+      premium: product === null ? null : product === 'premium',
+      playback: toPlayback(player),
+      devices: (Array.isArray(list) ? list : []).flatMap((raw) => toDevice(raw)),
+      observedAt: new Date(this.clock()).toISOString(),
     };
-    return { playback };
+    this.controlCache = { at: this.clock(), value };
+    return value;
+  }
+
+  /** play / pause / next / previous on the active output (or an explicit available one). */
+  async control(command: SpotifyControlCommand, deviceId?: string): Promise<SpotifyControlResult> {
+    const before = await this.prepareControl(deviceId);
+    const query = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
+    const request: Record<SpotifyControlCommand, [string, string]> = {
+      play: ['PUT', `/me/player/play${query}`],
+      pause: ['PUT', `/me/player/pause${query}`],
+      next: ['POST', `/me/player/next${query}`],
+      previous: ['POST', `/me/player/previous${query}`],
+    };
+    const [method, path] = request[command];
+    const trackOf = (state: SpotifyControlState) => state.playback?.trackId ?? null;
+    return this.runControl(method, path, undefined, (state) =>
+      command === 'play'
+        ? state.playback?.isPlaying === true
+        : command === 'pause'
+          ? state.playback?.isPlaying === false
+          : trackOf(state) !== trackOf(before),
+    );
+  }
+
+  /** Moves playback to another available output. `play` keeps or starts playing there. */
+  async transfer(deviceId: string, play: boolean): Promise<SpotifyControlResult> {
+    await this.prepareControl(deviceId);
+    return this.runControl('PUT', '/me/player', { device_ids: [deviceId], play }, (state) =>
+      state.devices.some((d) => d.id === deviceId && d.isActive),
+    );
+  }
+
+  /** Starts a playlist on the active output, or on an explicitly chosen available one. */
+  async playPlaylist(playlistId: string, deviceId?: string): Promise<SpotifyControlResult> {
+    const before = await this.prepareControl(deviceId);
+    if (!deviceId && !before.devices.some((d) => d.isActive)) {
+      throw new ApiError(
+        'spotify_no_device',
+        'No active Spotify output. Pick an available device first.',
+      );
+    }
+    const uri = `spotify:playlist:${playlistId}`;
+    const query = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
+    return this.runControl(
+      'PUT',
+      `/me/player/play${query}`,
+      { context_uri: uri },
+      (state) => state.playback?.contextUri === uri && state.playback.isPlaying,
+    );
+  }
+
+  /** Checks permission, Premium and the target output before anything is sent to Spotify. */
+  private async prepareControl(deviceId?: string): Promise<SpotifyControlState> {
+    if (!this.canControl) {
+      throw new ApiError(
+        'spotify_scope_missing',
+        'The saved authorization cannot control playback. Connect Spotify again and accept all permissions.',
+      );
+    }
+    const state = await this.controlState();
+    if (state.premium === false) {
+      throw new ApiError(
+        'spotify_premium_required',
+        'Controlling playback needs a Premium account.',
+      );
+    }
+    if (deviceId) {
+      const device = state.devices.find((d) => d.id === deviceId);
+      if (!device) {
+        throw new ApiError(
+          'spotify_no_device',
+          'That output is not available on Spotify right now. Open Spotify on it and refresh.',
+        );
+      }
+      if (device.isRestricted) {
+        throw new ApiError('spotify_restricted', 'Spotify does not allow controlling that output.');
+      }
+    }
+    return state;
+  }
+
+  /**
+   * Sends one command and reports it honestly: HTTP 2xx only means Spotify accepted it, so the state is read
+   * again (a few times, spaced) and the result is `confirmed` only if the change was observed.
+   */
+  private async runControl(
+    method: string,
+    path: string,
+    body: unknown,
+    observed: (state: SpotifyControlState) => boolean,
+  ): Promise<SpotifyControlResult> {
+    if (this.controlBusy) {
+      throw new ApiError('conflict', 'Another Spotify command is still running.');
+    }
+    this.controlBusy = true;
+    try {
+      await this.authorized(path, { method, body, command: true });
+      let state: SpotifyControlState | null = null;
+      for (let attempt = 0; attempt < CONTROL_CONFIRM_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, this.options.confirmDelayMs ?? 700));
+        this.controlCache = null;
+        try {
+          state = await this.readControlState();
+        } catch {
+          break; // reading back failed (for example rate limited): report what we know
+        }
+        if (observed(state)) return { status: 'confirmed', state };
+      }
+      this.controlCache = null;
+      return {
+        status: 'accepted',
+        state: state ?? (await this.controlState().catch(() => EMPTY_STATE)),
+      };
+    } finally {
+      this.controlBusy = false;
+    }
   }
 
   // ---------------------------------------------------------------------------------------------------
@@ -517,7 +669,8 @@ export class SpotifyService {
   }
 
   /** Calls the Web API as the connected user, refreshing the token when needed. `null` means 204. */
-  private async authorized(path: string): Promise<unknown> {
+  private async authorized(path: string, init: CallInit = {}): Promise<unknown> {
+    this.assertNotLimited();
     const record = this.options.repo.get();
     if (!record || record.reauthRequired || !record.refreshTokenEnc) {
       throw new ApiError(
@@ -529,13 +682,13 @@ export class SpotifyService {
     }
     let token = await this.validAccessToken(record);
     try {
-      return await this.get(path, token);
+      return await this.call(path, token, init);
     } catch (error) {
       // The token can be revoked or expire between our check and Spotify's: refresh once and retry.
       if (error instanceof TokenRejected) {
         token = await this.refresh(true);
         try {
-          return await this.get(path, token);
+          return await this.call(path, token, init);
         } catch (second) {
           // A brand-new token was also refused: the authorization itself is no longer valid.
           if (second instanceof TokenRejected) {
@@ -661,36 +814,68 @@ export class SpotifyService {
   }
 
   /** GET on the Web API with a bearer token. Returns the JSON body, or `null` for 204. */
-  private async get(path: string, accessToken: string): Promise<unknown> {
+  private async call(path: string, accessToken: string, init: CallInit = {}): Promise<unknown> {
     const response = await this.fetchJson(`${this.endpoints.apiUrl}${path}`, {
-      headers: { authorization: `Bearer ${accessToken}` },
+      method: init.method ?? 'GET',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
-    switch (true) {
-      case response.status === 204:
-        return null;
-      case response.status === 200:
-        return response.body;
-      case response.status === 401:
-        // Signalled to `authorized`, which refreshes once and retries.
-        throw new TokenRejected();
-      case response.status === 403:
-        throw new ApiError(
-          'spotify_forbidden',
-          'Spotify refused access. The account may not be allowed to use this app (apps in development mode only accept users added in the Spotify dashboard), or a permission is missing.',
-        );
-      case response.status === 429:
-        throw this.rateLimited(response.retryAfter);
-      case response.status >= 500:
-        throw new ApiError('upstream_error', 'Spotify is having problems. Try again later.');
-      default:
-        throw new ApiError('upstream_error', 'Unexpected answer from Spotify.');
+    if (response.status === 204 || response.status === 202) return null;
+    if (response.status === 200) return response.body;
+    if (response.status === 401) {
+      // Signalled to `authorized`, which refreshes once and retries.
+      throw new TokenRejected();
     }
+    if (response.status === 429) throw this.rateLimited(response.retryAfter);
+    if (response.status >= 500) {
+      throw new ApiError('upstream_error', 'Spotify is having problems. Try again later.');
+    }
+    const reason = asString(asRecord(asRecord(response.body).error).reason);
+    if (init.command) {
+      if (response.status === 404 || reason === 'NO_ACTIVE_DEVICE') {
+        throw new ApiError(
+          'spotify_no_device',
+          'No active Spotify output. Open Spotify on a device or pick one from the list.',
+        );
+      }
+      if (response.status === 403) {
+        throw reason === 'PREMIUM_REQUIRED'
+          ? new ApiError(
+              'spotify_premium_required',
+              'Controlling playback needs a Premium account.',
+            )
+          : new ApiError(
+              'spotify_restricted',
+              'Spotify refused the command for this output (it may be restricted or the action is not allowed right now).',
+            );
+      }
+    }
+    if (response.status === 403) {
+      throw new ApiError(
+        'spotify_forbidden',
+        'Spotify refused access. The account may not be allowed to use this app (apps in development mode only accept users added in the Spotify dashboard), or a permission is missing.',
+      );
+    }
+    throw new ApiError('upstream_error', 'Unexpected answer from Spotify.');
   }
 
-  private rateLimited(retryAfter: number | null): ApiError {
+  private assertNotLimited(): void {
+    const remaining = Math.ceil((this.limitedUntil - this.clock()) / 1000);
+    if (remaining > 0) throw this.rateLimited(remaining, false);
+  }
+
+  private rateLimited(retryAfter: number | null, record = true): ApiError {
+    const seconds = retryAfter ?? 5;
+    if (record) this.limitedUntil = Math.max(this.limitedUntil, this.clock() + seconds * 1000);
     return new ApiError(
       'too_many_requests',
-      `Spotify is limiting requests.${retryAfter ? ` Try again in ${retryAfter} seconds.` : ''}`,
+      `Spotify is limiting requests. Try again in ${seconds} seconds.`,
+      {
+        retryAfter: seconds,
+      },
     );
   }
 
@@ -727,6 +912,40 @@ export class SpotifyService {
       retryAfter: Number.isFinite(retry) && retry > 0 ? retry : null,
     };
   }
+}
+
+interface CallInit {
+  method?: string;
+  body?: unknown;
+  /** A playback command: Spotify's 403/404 reasons are mapped to actionable errors. */
+  command?: boolean;
+}
+
+/** `null` (HTTP 204) means nothing is playing on any device. */
+function toPlayback(body: unknown): SpotifyPlayback | null {
+  if (body === null) return null;
+  const data = asRecord(body);
+  const item = asRecord(data.item);
+  const track = asString(item.name)
+    ? {
+        name: asString(item.name)!,
+        artists: (Array.isArray(item.artists) ? item.artists : [])
+          .map((artist) => asString(asRecord(artist).name))
+          .filter((name): name is string => name !== null),
+        album: asString(asRecord(item.album).name),
+        durationMs: asNumber(item.duration_ms) ?? 0,
+      }
+    : null;
+  const disallows = asRecord(asRecord(data.actions).disallows);
+  return {
+    isPlaying: data.is_playing === true,
+    contextUri: asString(asRecord(data.context).uri),
+    disallowed: Object.keys(disallows).filter((key) => disallows[key] === true),
+    trackId: asString(item.id),
+    device: toDevice(data.device)[0] ?? null,
+    track,
+    progressMs: asNumber(data.progress_ms),
+  };
 }
 
 function toDevice(raw: unknown): SpotifyDevice[] {

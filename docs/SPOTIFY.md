@@ -2,21 +2,81 @@
 
 Two separate paths, on purpose:
 
-- **Playback control** (play/pause/next/previous, choosing the output, starting a playlist) goes through the
-  **official Home Assistant Spotify integration**: Home Control -> API -> Home Assistant -> Spotify. No extra
-  Spotify permission, OAuth connection or polling is needed. See "Playback control" below.
-- **Reading your account** (playlists, devices, now playing) uses the direct, **read-only** connection from
-  the sections that follow. It stays only because Home Assistant cannot browse playlists while idle (see
-  below); it never changes playback.
+- **Direct control (default when available).** The Music page reads the account's playback and controls it
+  through the **Spotify Web API** with the direct connection: play/pause, previous/next, choosing an output
+  (transfer) and starting a playlist, on whichever device is active (phone, computer, TV or Echo), with no
+  Home Assistant involved. See "Direct playback control" below. It needs the connection to include the
+  `user-modify-playback-state` permission (connect again once if it was made earlier).
+- **Home Assistant path (kept, still works).** The official Home Assistant Spotify integration stays
+  installed and untouched. The Music page falls back to it when the direct connection is missing or lacks
+  the control permission, or when you choose "Usar o Home Assistant". See "Playback control through Home
+  Assistant" below.
 
 > **Status.** The direct connection and the configuration/test screen were built and checked against a
 > **simulated Spotify** (a local server that mimics the authorization, token and Web API endpoints, PKCE
 > included): save/validate, connect, restart-safe tokens, test results for missing permissions, free plan,
 > a 403 and a revoked authorization, and Client ID changes. It has **not** been tried against the real
 > Spotify with the household Premium account: that needs your own Spotify app and login. Spotify changes
-> its rules often (see "Things that may differ"); the first real connection is the real test.
+> its rules often (see "Things that may differ"); the first real connection is the real test. The direct
+> playback control (commands, transfer, playlist, accepted vs confirmed, 429 handling) was exercised the
+> same way against the simulated Spotify; **real playback on the household devices is still unverified**.
 
-## Playback control (through Home Assistant)
+## Direct playback control (Spotify Web API)
+
+Requires a **Premium** account (Spotify rejects playback commands from free accounts) and a connection that
+includes `user-modify-playback-state`. A connection made before that permission existed keeps working for
+reading; **Ajustes > Spotify > Testar conexão** lists the missing permission and **Conectar de novo** fixes it.
+
+| Method | Path                        | Body                                                                         |
+| ------ | --------------------------- | ---------------------------------------------------------------------------- |
+| GET    | `/spotify/control/state`    | Playback (track, context, active output, `disallowed`) and available outputs |
+| POST   | `/spotify/control/command`  | `{ "command": "play\|pause\|next\|previous", "deviceId"? }`                  |
+| POST   | `/spotify/control/transfer` | `{ "deviceId", "play"? }` (default: keep playing)                            |
+| POST   | `/spotify/control/playlist` | `{ "playlistId", "deviceId"? }` (active output if none)                      |
+
+- **Follows the active device.** Commands go to the account's active output (phone, computer, TV, Echo...)
+  unless a `deviceId` is given. The screen disables a control when Spotify's `actions.disallows` says it is
+  not allowed right now.
+- **Accepted is not confirmed.** Spotify answers `2xx` to say it _accepted_ a command. The API then reads the
+  state again (up to 3 times, 0.7 s apart) and answers `confirmed` only if the change was observed (playing
+  or paused, a different track, the chosen output active, the playlist as context); otherwise `accepted`,
+  and the screen says the change may still take a few seconds.
+- **Actionable failures** (HTTP 409, nothing is claimed as played):
+
+  | Code                       | Cause                                                   | Screen suggests                     |
+  | -------------------------- | ------------------------------------------------------- | ----------------------------------- |
+  | `spotify_no_device`        | No active output, or the chosen one is not listed       | Open Spotify on a device / pick one |
+  | `spotify_restricted`       | The output is restricted, or Spotify refused the action | Choose another output               |
+  | `spotify_premium_required` | Free account                                            | Premium is required to control      |
+  | `spotify_scope_missing`    | Connection without the control permission               | Conectar de novo, accept all        |
+  | `too_many_requests` (429)  | Spotify rate limit; carries `retryAfter` seconds        | Wait; reading pauses meanwhile      |
+
+  Commands are checked before anything is sent: the output must be currently listed and not restricted.
+
+- **Bounded polling.** The server reads `/me/player` and `/me/player/devices` at most once per 2 seconds
+  (cached, concurrent calls share one). The Music page refreshes every 5 s **only while the tab is
+  visible**, refreshes when it becomes visible again, doubles the wait after failures (up to 60 s) and, after
+  a 429, waits at least the `Retry-After` it was given. While Spotify asks us to wait, the API answers
+  `429` without calling Spotify at all. One command at a time (`409` otherwise).
+- **No duplicate polling and no Alexa fallback.** The page uses one path at a time (direct or Home
+  Assistant); nothing sends voice commands or retries by waking an Echo.
+
+### Default path
+
+The Music page uses the direct path when the account is connected **with** the control permission, and shows
+which one is in use ("Controlando direto pelo Spotify" / "pelo Home Assistant"). **Usar o Home Assistant**
+switches back (remembered in that browser). The Home Assistant integration, its credentials and automations
+are never changed. Because real playback was not validated with the household account yet (see Validation
+status), keep the switch in mind if something behaves unexpectedly.
+
+### Development Mode limits
+
+Spotify apps start in development mode: only accounts added under **User Management** can use them
+(otherwise reads and commands answer `403`, shown as "o Spotify recusou o acesso"), and the number of users
+and request rate are limited. Playback commands on a **restricted** device, or a device that is not
+currently online in Spotify, cannot work whatever the app does.
+
+## Playback control through Home Assistant
 
 Requires the official Spotify integration in Home Assistant (entity `media_player.spotify_*`, found
 automatically). Commands target that one entity; the browser never chooses an entity or a service.
@@ -151,7 +211,9 @@ the server and any device can see the data.
   **"O acesso ao Spotify terminou. Conecte de novo"** with a button. Nothing is shown as connected when it
   is not.
 - **Least privilege.** Scopes requested: `user-read-private` (account and Premium status),
-  `user-read-playback-state`, `playlist-read-private`, `playlist-read-collaborative`. Nothing that can modify.
+  `user-read-playback-state`, `playlist-read-private`, `playlist-read-collaborative` and
+  `user-modify-playback-state` (play, pause, skip, transfer, start a playlist). Nothing else: no library
+  changes, no streaming.
 
 ## API (all need a login; `POST`s also need the CSRF token)
 

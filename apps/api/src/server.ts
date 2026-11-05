@@ -61,7 +61,7 @@ export interface ServerOptions {
   /** Explicit media player -> remote entity pairs. */
   deviceLinks?: Record<string, string>;
   /** Spotify app settings (`null`/absent: not configured). `endpoints` is only overridden by tests. */
-  spotify?: SpotifySettings & { endpoints?: SpotifyEndpoints };
+  spotify?: SpotifySettings & { endpoints?: SpotifyEndpoints; confirmDelayMs?: number };
   /** Key for encrypting stored tokens. A random one per process when absent (tests). */
   secrets?: SecretBox;
   /** Device actions can be switched off independently of authentication. */
@@ -113,6 +113,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         ? { clientId: options.spotify.clientId, redirectUri: options.spotify.redirectUri }
         : null,
       endpoints: options.spotify?.endpoints,
+      confirmDelayMs: options.spotify?.confirmDelayMs,
       repo: app.storage.spotify,
       configRepo: app.storage.spotifyConfig,
       secrets: options.secrets ?? SecretBox.random(),
