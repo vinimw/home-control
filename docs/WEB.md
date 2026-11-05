@@ -239,3 +239,16 @@ request an Alexa integration update. The backend owns one Home Assistant WebSock
 refreshes its registry from HA's stored states every five minutes by default. Alexa's separate cloud
 polling is controlled by the Home Assistant integration, not by browser traffic. Reducing page traffic
 alone does not eliminate Amazon rate limiting.
+
+## Room order and collapsed rooms (#71)
+
+- **Order.** Rooms on the devices screen follow the order you saved; a newly created room goes **last** (it no
+  longer jumps to the top). In **Organizar cartões** each saved room has _Subir_/_Descer_ buttons. The order
+  is stored on the server (`rooms.sort_order`) through `PUT /rooms/order` with `{ "ids": [...] }` (listed
+  rooms first, unlisted ones keep their relative order; unknown ids are ignored), so every device sees it.
+  Rooms that only exist as Home Assistant areas (never saved in the app) cannot be moved: they appear after
+  the saved ones, alphabetically, and "Sem cômodo" is always last.
+- **Collapse.** Each room title is a button that folds the room and shows how many items it holds
+  (`aria-expanded`). The choice is kept **on that device/browser** (`localStorage`, key `collapsed-rooms`),
+  survives reloads and applies to every room including "Sem cômodo"; it is not shared between your phone and
+  your computer. While organizing cards every room stays open so cards can be dropped into it.

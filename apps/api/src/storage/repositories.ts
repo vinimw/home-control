@@ -50,6 +50,8 @@ export interface RoomRepository {
   create(name: string): Room;
   /** Returns `undefined` when the room does not exist. Throws {@link DuplicateRoomError} on a name clash. */
   update(id: string, change: { name?: string; sortOrder?: number }): Room | undefined;
+  /** Puts the listed rooms first, in this order; unlisted rooms keep their relative order after them. */
+  reorder(ids: string[]): Room[];
   /** Devices assigned to the room are unassigned, not deleted. */
   delete(id: string): boolean;
   count(): number;
