@@ -156,6 +156,20 @@ export const MIGRATIONS: readonly Migration[] = [
     CREATE INDEX idx_diagnostics_at ON diagnostics(at);
   `,
   },
+  {
+    id: 8,
+    name: 'scenes',
+    sql: `
+    CREATE TABLE scenes (
+      id         TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      steps      TEXT NOT NULL,
+      last_run   TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `,
+  },
 ];
 
 const checksumOf = (sql: string): string => createHash('sha256').update(sql).digest('hex');
