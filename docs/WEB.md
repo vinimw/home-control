@@ -127,10 +127,14 @@ keeps it live:
    relayed to the API. The browser never talks to the API directly and `API_INTERNAL_URL` never reaches it.
    Only the fixed routes under `app/api/devices` exist (list, events, `:id/actions`, `:id/settings`); the
    relay validates the device id, limits the body to 16 KB and exposes no other API path.
-2. `useDevices` loads the list, opens the stream and, on every (re)connection, reloads the list before
-   trusting events. A list response never overwrites a device that changed after the request started.
+2. `useDevices` starts with the server-rendered list. The SSE opening event supplies a fresh cached
+   snapshot on every (re)connection, avoiding a second list request and closing the hydration gap.
+   Older APIs without snapshots fall back to a list request. An earlier request cannot overwrite a
+   newer stream snapshot or device event.
 3. If the stream drops the badge says **Reconectando...**, a banner explains it and the list is polled every
-   10 s until the stream is back (every 60 s while live, as a safety net). **Atualizar** forces a reload.
+   10 s until the stream is back (every 60 s while live, as a safety net). **Atualizar** forces a reload of the API cache, without polling Home Assistant or Amazon.
+   Hidden tabs close their event stream and skip polling; returning to the tab opens one stream and
+   receives a new snapshot.
 4. If the API cannot be reached, the data on screen is marked as possibly out of date (with the time of the
    last good update); with no data at all an error state offers a retry. Nothing is shown as fresh when it
    is not.
@@ -196,7 +200,8 @@ devices have controls, so it varies with the data (this run: 19 devices, 5 of th
 ## Card ordering (`/devices`, #54)
 
 **Organizar cartões** enters layout-edit mode. Drag only by the handle (mouse, pen or touch), drop over
-another card in the same room, or use the **Mover … para antes/depois** buttons with touch or keyboard.
+another card to reorder, or a room section to change groups. The **Mover … para antes/depois** buttons
+and **Mover para cômodo** selector also work with touch or keyboard.
 Escape cancels a drag. Card controls and links are inert while editing; dragging never sends device commands.
 Read-only sensor rows retain their compact presentation outside the movable card grid.
 
@@ -204,11 +209,33 @@ Each completed move saves automatically; pointer movement itself makes no reques
 custom Alexa cards share the same responsive order, applied within each room. Filters expose a subset:
 only the visible cards exchange slots, preserving hidden cards' relative order. Newly encountered ids are
 appended alphabetically after saved ids (id breaks name ties). Missing/deleted ids stay in the saved list
-without rendering a placeholder, so temporarily missing devices recover their placement. Reordering does
-not change room assignments. Device state events do not replace layout metadata.
+without rendering a placeholder, so temporarily missing devices recover their placement. Cross-room drops
+update local room assignments. Device state events do not replace layout metadata.
 
 The initial layout loads alongside the device lists on the server. `GET/PATCH /api/device-layout` relays
 only `/device-layout`, with the existing session, CSRF, origin checks and 16 KB body limit. A move displays
 **Salvando ordem…** and temporarily blocks other moves. A lost/failed response may already have committed:
-the proposal remains visible with an explicit warning, and further editing is blocked until **Recarregar
-ordem salva** reads the server's authoritative order. A stale tab cannot overwrite newer revisions.
+an explicit warning blocks further editing until **Recarregar ordem salva** reloads the page and reads
+both authoritative order and room membership. A stale tab cannot overwrite newer revisions.
+
+### Moving between rooms
+
+In organization mode, all known rooms (including empty saved rooms and filtered-out rooms) remain visible
+as drop targets. **Novo cômodo → Criar cômodo** saves an empty local room immediately; drop a card into it
+or choose it in the card's **Mover para cômodo** selector. Dropping over another room's card inserts before
+that card; dropping on the section appends after its cards, including hidden cards. A successful move clears
+the room filter so the moved card stays visible. Category and favorite filters retain their meaning.
+
+`POST /api/device-layout/move` relays `/device-layout/move`. The API saves room assignment and card order
+in one revision-checked SQLite transaction. Home Assistant areas are localized by their server-known names,
+reusing matching local rooms; the original source area remains available after its last card leaves.
+These changes organize this app only: no device command or Home Assistant area-edit request is sent.
+Mouse, pen and touch share the handle gesture; Escape cancels it. The destination section is highlighted.
+
+### Connection budget
+
+Page loads, layout editing, favorites and the browser's safety polling read the API registry; they never
+request an Alexa integration update. The backend owns one Home Assistant WebSocket per API process and
+refreshes its registry from HA's stored states every five minutes by default. Alexa's separate cloud
+polling is controlled by the Home Assistant integration, not by browser traffic. Reducing page traffic
+alone does not eliminate Amazon rate limiting.

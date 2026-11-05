@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DeviceLayout } from '@home-control/shared';
+import type { DeviceLayout, DeviceRoomMoveResult } from '@home-control/shared';
 import { csrfHeaders, redirectToLogin } from '@/lib/csrf';
 
 /** Replace only visible slots. Hidden/missing ids keep their exact positions and relative order. */
@@ -77,5 +77,37 @@ export function useDeviceLayout(initial: DeviceLayout | null) {
     [layout],
   );
 
-  return { layout, status, save, reload };
+  const moveRoom = useCallback(
+    async (
+      cardIds: string[],
+      cardId: string,
+      roomId: string,
+      apply: (result: DeviceRoomMoveResult) => void,
+    ) => {
+      if (busy.current || !layout) return;
+      busy.current = true;
+      setStatus('saving');
+      try {
+        const response = await fetch('/api/device-layout/move', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...csrfHeaders() },
+          body: JSON.stringify({ revision: layout.revision, cardIds, cardId, roomId }),
+          signal: AbortSignal.timeout(12_000),
+        });
+        if (response.status === 401) redirectToLogin();
+        if (!response.ok) throw new Error('Room move failed');
+        const result = (await response.json()) as DeviceRoomMoveResult;
+        setLayout(result.layout);
+        apply(result);
+        setStatus('ready');
+        busy.current = false;
+      } catch {
+        // Room assignment and order must be reloaded together after an ambiguous response.
+        setStatus('error');
+      }
+    },
+    [layout],
+  );
+
+  return { layout, status, save, reload, moveRoom };
 }

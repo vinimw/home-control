@@ -3,8 +3,8 @@ import { inTransaction, type Database } from './database.js';
 
 export interface DeviceLayoutRepository {
   get(): DeviceLayout;
-  /** Compare-and-swap prevents stale tabs/requests from overwriting a newer layout. */
-  save(layout: DeviceLayout): DeviceLayout | null;
+  /** Compare-and-swap; optional metadata changes participate in the same transaction. */
+  save(layout: DeviceLayout, apply?: () => void): DeviceLayout | null;
 }
 
 export class SqliteDeviceLayoutRepository implements DeviceLayoutRepository {
@@ -20,14 +20,16 @@ export class SqliteDeviceLayoutRepository implements DeviceLayoutRepository {
     return { revision: row.revision, cardIds: JSON.parse(row.card_ids) as string[] };
   }
 
-  save(layout: DeviceLayout): DeviceLayout | null {
+  save(layout: DeviceLayout, apply?: () => void): DeviceLayout | null {
     return inTransaction(this.db, () => {
       const changed = this.db
         .prepare(
           'UPDATE device_layout SET revision = revision + 1, card_ids = ? WHERE id = 1 AND revision = ?',
         )
         .run(JSON.stringify(layout.cardIds), layout.revision);
-      return changed.changes === 1 ? this.get() : null;
+      if (changed.changes !== 1) return null;
+      apply?.();
+      return this.get();
     });
   }
 }
