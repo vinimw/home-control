@@ -1,4 +1,6 @@
 import type { ApiErrorPayload, HomeAssistantConnectionState } from '@home-control/shared';
+import { randomUUID } from 'node:crypto';
+import type { Observe } from '../diagnostics.js';
 import { HomeAssistantError } from './errors.js';
 import type { HassStateChangedEvent, Logger } from './types.js';
 
@@ -7,6 +9,7 @@ export interface WsClientOptions {
   baseUrl: string;
   token: string;
   logger: Logger;
+  observe?: Observe;
   connectTimeoutMs?: number;
   pingIntervalMs?: number;
   pongTimeoutMs?: number;
@@ -39,6 +42,7 @@ export class HomeAssistantWsClient {
   haVersion: string | null = null;
   lastError: ApiErrorPayload | null = null;
 
+  private readonly diagnosticConnectionId = randomUUID();
   private socket: WebSocket | null = null;
   private nextId = 1;
   private subscriptionId: number | null = null;
@@ -157,6 +161,24 @@ export class HomeAssistantWsClient {
       return;
     }
 
+    try {
+      this.options.observe?.({
+        kind: 'ws-in',
+        action: ['auth_required', 'auth_ok', 'auth_invalid', 'result', 'event', 'pong'].includes(
+          String(message.type),
+        )
+          ? String(message.type)
+          : 'unknown',
+        operationId:
+          typeof message.id === 'number'
+            ? `${this.diagnosticConnectionId}:${message.id}`
+            : this.diagnosticConnectionId,
+        outcome: message.success === false ? 'failed' : 'received',
+        response: { messageId: typeof message.id === 'number' ? message.id : null },
+      });
+    } catch {
+      /* isolated */
+    }
     switch (message.type) {
       case 'auth_required':
         this.send({ type: 'auth', access_token: this.options.token });
@@ -292,12 +314,36 @@ export class HomeAssistantWsClient {
   private send(payload: Record<string, unknown>): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(payload));
+      try {
+        this.options.observe?.({
+          kind: 'ws-out',
+          action: String(payload.type).slice(0, 50),
+          operationId:
+            typeof payload.id === 'number'
+              ? `${this.diagnosticConnectionId}:${payload.id}`
+              : this.diagnosticConnectionId,
+          outcome: 'sent',
+          request: { messageId: typeof payload.id === 'number' ? payload.id : null },
+        });
+      } catch {
+        /* isolated */
+      }
     }
   }
 
   private setState(state: RealtimeState): void {
     if (this.state === state) return;
     this.state = state;
+    try {
+      this.options.observe?.({
+        kind: 'connection',
+        action: 'websocket',
+        outcome: state,
+        response: { reconnectAttempts: this.reconnectAttempts },
+      });
+    } catch {
+      /* isolated */
+    }
     for (const listener of this.connectionListeners) {
       try {
         listener(state);

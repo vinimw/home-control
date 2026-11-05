@@ -1,4 +1,5 @@
 import type { ApiErrorPayload, HomeAssistantStatus } from '@home-control/shared';
+import type { Observe } from '../diagnostics.js';
 import { HomeAssistantError, toErrorPayload } from './errors.js';
 import { HomeAssistantRestClient } from './rest-client.js';
 import type { HassStateChangedEvent, Logger } from './types.js';
@@ -15,7 +16,7 @@ export class HomeAssistantService {
   private readonly restClient: HomeAssistantRestClient | null;
   private readonly wsClient: HomeAssistantWsClient | null;
 
-  constructor(settings: HomeAssistantSettings | null, logger: Logger) {
+  constructor(settings: HomeAssistantSettings | null, logger: Logger, observe?: Observe) {
     if (!settings) {
       this.restClient = null;
       this.wsClient = null;
@@ -25,11 +26,13 @@ export class HomeAssistantService {
       baseUrl: settings.url,
       token: settings.token,
       timeoutMs: settings.timeoutMs,
+      observe,
     });
     this.wsClient = new HomeAssistantWsClient({
       baseUrl: settings.url,
       token: settings.token,
       logger,
+      observe,
     });
   }
 

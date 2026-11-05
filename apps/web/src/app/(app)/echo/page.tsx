@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { buttonVariants } from '@/components/ui/button';
 import type { Metadata } from 'next';
 import { EchoPanel } from '@/components/echo/echo-panel';
 import { getAlexaCommands, getDevices } from '@/lib/api';
@@ -13,10 +15,15 @@ export default async function EchoPage({
   const { device } = await searchParams;
   const [devices, commands] = await Promise.all([getDevices(), getAlexaCommands()]);
   return (
-    <EchoPanel
-      initialDevices={devices}
-      initialCommands={commands}
-      preferredDeviceId={typeof device === 'string' ? device : undefined}
-    />
+    <div className="flex flex-col gap-4">
+      <Link href="/echo/diagnostics" className={buttonVariants({ variant: 'outline' })}>
+        Diagnóstico da Alexa
+      </Link>
+      <EchoPanel
+        initialDevices={devices}
+        initialCommands={commands}
+        preferredDeviceId={typeof device === 'string' ? device : undefined}
+      />
+    </div>
   );
 }
