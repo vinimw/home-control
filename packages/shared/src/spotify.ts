@@ -130,6 +130,12 @@ export interface SpotifyDevicesResponse {
 
 export interface SpotifyPlayback {
   isPlaying: boolean;
+  /** `spotify:playlist:...` (or album/artist) being played, when Spotify reports a context. */
+  contextUri: string | null;
+  /** Spotify's id of the current track; lets the API notice that a skip happened. */
+  trackId: string | null;
+  /** Actions Spotify says are not allowed right now (`pausing`, `resuming`, `skipping_next`...). */
+  disallowed: string[];
   device: SpotifyDevice | null;
   track: { name: string; artists: string[]; album: string | null; durationMs: number } | null;
   progressMs: number | null;
@@ -179,4 +185,32 @@ export interface SpotifyPlayerState {
 export interface SpotifyPlayerResult {
   status: 'confirmed' | 'accepted';
   player: SpotifyPlayerState;
+}
+
+/** Permission needed to control playback through the Web API (added to the read-only ones). */
+export const SPOTIFY_CONTROL_SCOPE = 'user-modify-playback-state';
+
+export const API_SPOTIFY_CONTROL_PATH = `${API_SPOTIFY_PATH}/control`;
+
+export type SpotifyControlCommand = 'play' | 'pause' | 'next' | 'previous';
+
+/** `GET /spotify/control/state`: what Spotify reports right now (one bounded read, cached for a moment). */
+export interface SpotifyControlState {
+  /** The saved authorization includes the playback-control permission. */
+  canControl: boolean;
+  /** The account is Premium (`null` when unknown). Spotify only accepts commands from Premium accounts. */
+  premium: boolean | null;
+  playback: SpotifyPlayback | null;
+  devices: SpotifyDevice[];
+  /** When the state was read from Spotify (ISO). */
+  observedAt: string;
+}
+
+/**
+ * `confirmed`: the state observed afterwards shows the change. `accepted`: Spotify accepted the command
+ * (HTTP 2xx) but the change was not observed in time; it can still arrive.
+ */
+export interface SpotifyControlResult {
+  status: 'confirmed' | 'accepted';
+  state: SpotifyControlState;
 }

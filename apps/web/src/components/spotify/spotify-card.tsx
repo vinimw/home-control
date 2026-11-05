@@ -143,7 +143,8 @@ export function SpotifyCard({ outcome }: { outcome: Outcome }) {
             </Alert>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Conecte sua conta para ver dispositivos e playlists. Só pedimos permissão de leitura.
+              Conecte sua conta para ver dispositivos e playlists e para controlar a reprodução
+              (play, pausa, próxima, trocar de saída).
             </p>
           )}
           <details className="rounded-md border p-3">

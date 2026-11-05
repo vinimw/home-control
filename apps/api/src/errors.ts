@@ -5,14 +5,22 @@ export class ApiError extends Error {
   constructor(
     readonly code: ApiErrorCode,
     message: string,
-    options: { cause?: unknown } = {},
+    options: { cause?: unknown; retryAfter?: number } = {},
   ) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = 'ApiError';
+    this.retryAfter = options.retryAfter;
   }
 
+  /** Seconds to wait before retrying, when the failure is rate limiting. */
+  readonly retryAfter: number | undefined;
+
   toPayload(): ApiErrorPayload {
-    return { code: this.code, message: this.message };
+    return {
+      code: this.code,
+      message: this.message,
+      ...(this.retryAfter ? { retryAfter: this.retryAfter } : {}),
+    };
   }
 }
 
@@ -30,6 +38,10 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   setup_required: 409,
   spotify_connect_required: 409,
   spotify_forbidden: 502,
+  spotify_no_device: 409,
+  spotify_restricted: 409,
+  spotify_premium_required: 409,
+  spotify_scope_missing: 409,
   device_unavailable: 409,
   unsupported_action: 422,
   invalid_params: 422,
