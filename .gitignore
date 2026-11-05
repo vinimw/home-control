@@ -34,3 +34,6 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 node_modules
+
+# Backups contain the database and its encryption key: never commit them.
+backups/

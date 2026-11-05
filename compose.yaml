@@ -1,5 +1,12 @@
 name: home-control
 
+# Keeps container logs from filling the disk of an always-on machine: 5 files x 10 MB per service.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   api:
     build:
@@ -20,6 +27,7 @@ services:
     volumes:
       - api-data:/data
     restart: unless-stopped
+    logging: *default-logging
 
   web:
     build:
@@ -36,6 +44,7 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   # Persistent SQLite storage for the API.
