@@ -110,8 +110,9 @@ currently online in Spotify, cannot work whatever the app does.
 
 ## Your library: search, saved tracks, playlist tracks
 
-On the Music page (direct path) the **Biblioteca** section lets you search tracks, browse your saved
-("Curtidas") tracks, open the tracks of a playlist ("Ver faixas"), play a track and save or remove it. It
+On the Music page (direct path) the **Biblioteca** section has three tabs: **Buscar** (search tracks),
+**Curtidas** (your saved tracks) and **Playlists** (your playlists; click one to open its tracks, **Voltar**
+returns to the list; **Tocar** plays the whole playlist). You can play a track and save or remove it. It
 needs a connection that includes `user-library-read` and `user-library-modify`; an older connection keeps
 working for everything else and the page asks you to connect again (**Ajustes > Spotify > Conectar de novo**,
 accept all permissions; **Testar conexão** lists what is missing).

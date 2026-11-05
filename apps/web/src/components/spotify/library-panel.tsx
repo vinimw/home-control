@@ -6,31 +6,40 @@ import type { SpotifyPlaylist, SpotifyTrack } from '@home-control/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { PlaylistList } from './playlist-list';
 import { TrackList } from './track-list';
 import { useTrackSource, type TrackSource } from './use-track-source';
 
-type Tab = 'search' | 'saved';
+type Tab = 'search' | 'saved' | 'playlists';
+
+const TAB_LABEL: Record<Tab, string> = {
+  search: 'Buscar',
+  saved: 'Curtidas',
+  playlists: 'Playlists',
+};
 
 interface Props {
-  /** A playlist whose tracks should be shown (chosen from the playlists list), or `null`. */
-  playlist: SpotifyPlaylist | null;
-  onClosePlaylist: () => void;
   canPlay: boolean;
   playHint: string;
   busy: boolean;
   onPlay: (track: SpotifyTrack, contextUri?: string) => void;
+  /** Starts a whole playlist on the active output. */
+  onPlayPlaylist: (playlistId: string) => void;
+  playlistHint: string;
 }
 
 /** Your library: search, saved tracks and the tracks of a playlist. Reading and saving use your account. */
 export function LibraryPanel({
-  playlist,
-  onClosePlaylist,
   canPlay,
   playHint,
   busy,
   onPlay,
+  onPlayPlaylist,
+  playlistHint,
 }: Props) {
   const [tab, setTab] = useState<Tab>('search');
+  // The playlist whose tracks are open (chosen in the Playlists tab).
+  const [playlist, setPlaylist] = useState<SpotifyPlaylist | null>(null);
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
 
@@ -59,7 +68,7 @@ export function LibraryPanel({
       {playlist ? (
         <>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onClosePlaylist}>
+            <Button variant="ghost" size="sm" onClick={() => setPlaylist(null)}>
               <ArrowLeft aria-hidden />
               Voltar
             </Button>
@@ -77,7 +86,7 @@ export function LibraryPanel({
       ) : (
         <>
           <div role="tablist" aria-label="Biblioteca" className="flex gap-1">
-            {(['search', 'saved'] as const).map((id) => (
+            {(['search', 'saved', 'playlists'] as const).map((id) => (
               <button
                 key={id}
                 role="tab"
@@ -89,7 +98,7 @@ export function LibraryPanel({
                   tab === id ? 'bg-accent' : 'text-muted-foreground hover:bg-accent/50',
                 )}
               >
-                {id === 'search' ? 'Buscar' : 'Curtidas'}
+                {TAB_LABEL[id]}
               </button>
             ))}
           </div>
@@ -110,7 +119,16 @@ export function LibraryPanel({
               />
             </div>
           ) : null}
-          {source === null ? (
+          {tab === 'playlists' ? (
+            <PlaylistList
+              canPlay={canPlay}
+              busy={busy}
+              hint={playlistHint}
+              onPlay={onPlayPlaylist}
+              onOpen={setPlaylist}
+              showHeading={false}
+            />
+          ) : source === null ? (
             <p className="text-sm text-muted-foreground">
               {text.trim().length === 1
                 ? 'Digite pelo menos 2 letras.'
