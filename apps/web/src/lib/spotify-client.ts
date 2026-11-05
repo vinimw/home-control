@@ -31,6 +31,7 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
     'O Spotify só compartilha as faixas de playlists que você criou ou em que colabora.',
   conflict: 'Outro comando do Spotify ainda está em andamento.',
   csrf_invalid: 'A solicitação foi recusada por segurança. Recarregue a página.',
+  bad_request: 'O servidor recusou a solicitação do Spotify. Atualize a tela e tente novamente.',
 };
 const FALLBACK = 'Não foi possível falar com o servidor.';
 

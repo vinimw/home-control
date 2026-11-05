@@ -27,7 +27,12 @@ const configBody = z
   })
   .strict();
 
-const deviceId = z.string().regex(/^[A-Za-z0-9]{1,64}$/);
+// Spotify Connect device IDs are opaque strings, distinct from track and playlist IDs.
+const deviceId = z
+  .string()
+  .min(1)
+  .max(512)
+  .regex(/^[^\s\p{Cc}]+$/u);
 const commandBody = z
   .object({ command: z.enum(['play', 'pause', 'next', 'previous']), deviceId: deviceId.optional() })
   .strict();
