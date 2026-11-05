@@ -84,8 +84,10 @@ play-pause / next, and the **active output** with a "Trocar saída" button that 
 - **Connection details moved down.** "Configurar conexão do Spotify" is in a footer. Banners that need
   action (missing control permission, Premium required, reconnect) stay at the top. Without a configured
   or connected account the page shows what to do (configure, connect, reconnect) and a button to Ajustes.
-- **Header.** The header media widget shows only the Echo and the TV (read from Home Assistant); Spotify
-  is not part of it.
+- **Header.** The header media widget shows the Echo and the TV (read from Home Assistant) and, when it is
+  the source on top, Spotify with inline previous / play-pause / next beside the track name (see
+  [MEDIA_ACTIVITY.md](MEDIA_ACTIVITY.md)). It reuses the Music page's state: one shared refresh loop, no
+  second polling.
 
 ### Development Mode limits
 

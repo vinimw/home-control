@@ -1,7 +1,8 @@
 # Media activity in the header
 
-A compact control in the header shows what is playing on the **Echo (Alexa)** or the **Samsung TV**, with quick controls. Spotify is not
-part of it: it lives on the Music page, through the direct Spotify connection. Tap it for the full list of sources.
+A compact control in the header shows what is playing on the **Echo (Alexa)**, the **Samsung TV** or **Spotify**, with quick controls.
+Spotify comes from the direct Spotify connection (the same state as the Music page); the Echo and the TV
+come from Home Assistant. Tap it for the full list of sources.
 
 ## What you see
 
@@ -24,6 +25,24 @@ Automatic rule: the **most recently changed source in use**, where "in use" is a
 recent paused one. You can pick **Mostrar no topo** for another source (kept for the browser
 session). The other sources always stay reachable in the panel, so using the Echo and the TV together never
 hides one of them.
+
+## Spotify controls in the header
+
+When Spotify is the source on top, **anterior / pausar-tocar / próxima** appear as icon buttons right beside
+the track name, without opening the panel. They are shown only for a **known track on an active output** of
+a connected account that may be controlled (control permission and Premium); with no active session, after a
+disconnect, with an unknown track (an ad) or when the TV or the Echo is on top, they are hidden.
+
+- Commands are the direct Spotify commands of the Music page (`POST /spotify/control/command`): the button
+  that is not allowed right now (Spotify's `disallows`) is disabled, only one command runs at a time (the
+  play button shows a spinner and every button is disabled meanwhile) and the result is shown briefly under
+  the header: _Confirmado_, _aceito mas ainda não visível_ or the failure (no output, restricted, rate limit...),
+  never a guessed success.
+- **One shared state.** The header and the Music page read the same store, with a single refresh loop (every
+  5 s while the tab is visible, backing off after failures and waiting `Retry-After` after a 429; 60 s
+  between checks while Spotify is not configured or connected). A command or an external pause/resume,
+  track change or output change appears in both within one refresh.
+- On phones the brand text is hidden so the track title stays readable next to the three buttons.
 
 ## How it works
 
