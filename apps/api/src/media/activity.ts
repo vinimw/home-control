@@ -15,7 +15,6 @@ const str = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, 200) : null;
 
 function kindOf(device: Device): MediaSourceKind | null {
-  if (/^spotify/i.test(device.sourceName)) return 'spotify';
   if (device.type === 'tv') return 'tv';
   if (device.type === 'speaker' && /echo/i.test(device.sourceName)) return 'echo';
   return null;

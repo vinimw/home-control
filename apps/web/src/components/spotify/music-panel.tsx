@@ -14,29 +14,18 @@ import { derivePlayer } from './player-model';
 import { LibraryPanel } from './library-panel';
 import { PlaylistList } from './playlist-list';
 import { MiniPlayer, NowPlaying } from './now-playing';
-import { SpotifyPlayer } from './spotify-player';
 import { useSpotifyControl } from './use-spotify-control';
-import { useSpotifyPlayer } from './use-spotify-player';
-
-type Path = 'direct' | 'ha';
-const STORAGE_KEY = 'music-path';
 
 /**
- * Music page. The direct Spotify connection is the default when the account is connected with the
- * playback-control permission; otherwise (or by choice) it falls back to the Home Assistant integration.
+ * Music page. Everything goes through the direct Spotify connection. Without it the page explains what to do
+ * (configure, connect, reconnect) instead of showing a player that cannot work.
  */
 export function MusicPanel() {
   const [status, setStatus] = useState<SpotifyResult<SpotifyStatus> | null>(null);
-  const [preferred, setPreferred] = useState<Path | null>(null);
+  const load = () => void spotifyRequest<SpotifyStatus>('status').then(setStatus);
 
   useEffect(() => {
-    void spotifyRequest<SpotifyStatus>('status').then(setStatus);
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === 'direct' || saved === 'ha') setPreferred(saved);
-    } catch {
-      /* storage unavailable: the default applies */
-    }
+    load();
   }, []);
 
   if (status === null) {
@@ -48,59 +37,59 @@ export function MusicPanel() {
     );
   }
 
-  const direct =
-    status.ok && status.data.connected && status.data.scopes.includes(SPOTIFY_CONTROL_SCOPE);
-  const needsReconnect = status.ok && status.data.connected && !direct;
-  const path: Path = direct && preferred !== 'ha' ? 'direct' : 'ha';
+  if (!status.ok) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="flex items-start gap-1.5 text-sm" role="alert">
+          <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
+          {status.message}
+        </p>
+        <Button variant="outline" onClick={load}>
+          Tentar de novo
+        </Button>
+      </div>
+    );
+  }
 
-  const choose = (next: Path) => {
-    setPreferred(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      /* the choice still applies until the page is closed */
-    }
-  };
+  const s = status.data;
+  const needsSetup = !s.configured || !s.connected;
+  if (needsSetup) {
+    return (
+      <div className="flex flex-col items-start gap-3 rounded-lg border p-4">
+        <p className="flex items-start gap-1.5 text-sm" role="status">
+          <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          {!s.configured
+            ? 'O Spotify ainda não foi configurado. Salve o Client ID e o callback em Ajustes.'
+            : s.reauthRequired
+              ? 'O acesso ao Spotify terminou (revogado ou expirado). Conecte de novo em Ajustes.'
+              : 'Conecte sua conta do Spotify em Ajustes para ouvir e controlar a música por aqui.'}
+        </p>
+        <Link href="/settings" className={buttonVariants({ variant: 'default' })}>
+          Abrir Ajustes
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      {needsReconnect ? (
+      {!s.scopes.includes(SPOTIFY_CONTROL_SCOPE) ? (
         <p className="flex flex-wrap items-center gap-2 text-sm" role="status">
           <CircleAlert aria-hidden className="size-4 shrink-0 text-warning" />
-          Para controlar direto pelo Spotify, conecte de novo e aceite a permissão de controle.
+          Para controlar a reprodução, conecte de novo e aceite a permissão de controle.
           <Link href="/settings" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             Abrir Ajustes
           </Link>
         </p>
       ) : null}
-      {path === 'direct' ? (
-        <DirectMusicView
-          library={
-            status.ok && SPOTIFY_LIBRARY_SCOPES.every((scope) => status.data.scopes.includes(scope))
-          }
-        />
-      ) : (
-        <HaMusicView />
-      )}
+      <DirectMusicView
+        library={SPOTIFY_LIBRARY_SCOPES.every((scope) => s.scopes.includes(scope))}
+      />
       {/* Connection details live below the player: they are needed rarely, so they stay out of its way. */}
-      <footer className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-        <span>
-          {path === 'direct'
-            ? 'Controlando direto pelo Spotify.'
-            : 'Controlando pelo Home Assistant.'}{' '}
-          <Link href="/settings" className="underline underline-offset-2">
-            Configurar conexão
-          </Link>
-        </span>
-        {direct ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => choose(path === 'direct' ? 'ha' : 'direct')}
-          >
-            {path === 'direct' ? 'Usar o Home Assistant' : 'Usar o Spotify direto'}
-          </Button>
-        ) : null}
+      <footer className="border-t pt-3 text-xs text-muted-foreground">
+        <Link href="/settings" className="underline underline-offset-2">
+          Configurar conexão do Spotify
+        </Link>
       </footer>
     </div>
   );
@@ -253,45 +242,6 @@ function DirectMusicView({ library }: { library: boolean }) {
           />
         </>
       ) : null}
-    </>
-  );
-}
-
-function HaMusicView() {
-  const spotify = useSpotifyPlayer();
-  const { player } = spotify;
-  return (
-    <>
-      {player === null ? (
-        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-          <LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
-          Carregando o player…
-        </p>
-      ) : !player.ok ? (
-        <div className="flex flex-col items-start gap-2">
-          <p className="flex items-start gap-1.5 text-sm" role="alert">
-            <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
-            {player.message}
-          </p>
-          <Button variant="outline" onClick={() => void spotify.reload()}>
-            Tentar de novo
-          </Button>
-        </div>
-      ) : (
-        <SpotifyPlayer
-          player={player.data}
-          busy={spotify.busy}
-          notice={spotify.notice}
-          onCommand={(command) => void spotify.command(command)}
-          onSource={(source) => void spotify.selectSource(source)}
-        />
-      )}
-      <PlaylistList
-        canPlay={player?.ok === true && player.data.capabilities.playPlaylist}
-        busy={spotify.busy}
-        hint="Para tocar uma playlist, escolha antes uma saída ativa do Spotify."
-        onPlay={(id) => void spotify.playPlaylist(id)}
-      />
     </>
   );
 }

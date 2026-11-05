@@ -1,16 +1,14 @@
 # Spotify
 
-Two separate paths, on purpose:
-
-- **Direct control (default when available).** The Music page reads the account's playback and controls it
-  through the **Spotify Web API** with the direct connection: play/pause, previous/next, choosing an output
-  (transfer) and starting a playlist, on whichever device is active (phone, computer, TV or Echo), with no
-  Home Assistant involved. See "Direct playback control" below. It needs the connection to include the
-  `user-modify-playback-state` permission (connect again once if it was made earlier).
-- **Home Assistant path (kept, still works).** The official Home Assistant Spotify integration stays
-  installed and untouched. The Music page falls back to it when the direct connection is missing or lacks
-  the control permission, or when you choose "Usar o Home Assistant". See "Playback control through Home
-  Assistant" below.
+Home Control controls Spotify **only through the direct Spotify connection** (OAuth with PKCE, official Web
+API). The Music page reads the account's playback and controls it: play/pause, previous/next, seeking,
+choosing an output (transfer) and starting a playlist or track, on whichever device is active (phone,
+computer, TV or Echo), and has your library (search, saved tracks, playlists). Nothing goes through Home
+Assistant: there is no Home Assistant Spotify path, no switch between paths and the Home Assistant Spotify
+entity is hidden from the device list, the header and the scenes. (The integration itself, if you still have
+it installed in Home Assistant, is not touched or used.) Controlling needs the connection to include the
+`user-modify-playback-state` permission; without a connection the Music page asks you to configure and
+connect in **Ajustes > Spotify**.
 
 > **Status.** The direct connection and the configuration/test screen were built and checked against a
 > **simulated Spotify** (a local server that mimics the authorization, token and Web API endpoints, PKCE
@@ -83,23 +81,11 @@ play-pause / next, and the **active output** with a "Trocar saída" button that 
 - **Seeking** uses `PUT /me/player/seek` (`POST /spotify/control/seek { positionMs }`) and is enabled only
   when an output is active and Spotify does not list `seeking` under `actions.disallows`; otherwise the bar
   is read-only and says so. The result is `confirmed` only if the position was observed afterwards.
-- **Connection details moved down.** The "controlling directly via Spotify / Home Assistant" line, the
-  switch and "Configurar conexão" are in a footer. Banners that need action (missing control permission,
-  Premium required, reconnect) stay at the top.
-- **Header vs Music page.** The header widget reads Home Assistant's Spotify/Echo media players (a poll every
-  few seconds, and an Echo that is not the active output may keep showing its last track as paused), while
-  the Music page reads the Spotify account itself, which only knows the **active** output. They can differ
-  for a few moments or when an Echo/TV reports stale metadata. The header panel now says its state comes
-  from Home Assistant and links to Música; consolidating both on one source would need an extra request
-  path and was left out.
-
-### Default path
-
-The Music page uses the direct path when the account is connected **with** the control permission, and shows
-which one is in use ("Controlando direto pelo Spotify" / "pelo Home Assistant"). **Usar o Home Assistant**
-switches back (remembered in that browser). The Home Assistant integration, its credentials and automations
-are never changed. Because real playback was not validated with the household account yet (see Validation
-status), keep the switch in mind if something behaves unexpectedly.
+- **Connection details moved down.** "Configurar conexão do Spotify" is in a footer. Banners that need
+  action (missing control permission, Premium required, reconnect) stay at the top. Without a configured
+  or connected account the page shows what to do (configure, connect, reconnect) and a button to Ajustes.
+- **Header.** The header media widget shows only the Echo and the TV (read from Home Assistant); Spotify
+  is not part of it.
 
 ### Development Mode limits
 
@@ -151,48 +137,6 @@ accept all permissions; **Testar conexão** lists what is missing).
 - Rate limits, revocation and reconnect states are the same as for playback control (429 waits `Retry-After`,
   a revoked authorization asks to connect again).
 
-## Playback control through Home Assistant
-
-Requires the official Spotify integration in Home Assistant (entity `media_player.spotify_*`, found
-automatically). Commands target that one entity; the browser never chooses an entity or a service.
-
-| Method | Path                       | Body                                           |
-| ------ | -------------------------- | ---------------------------------------------- |
-| GET    | `/spotify/player`          | State, available outputs and **capabilities**  |
-| POST   | `/spotify/player/command`  | `{ "command": "play\|pause\|next\|previous" }` |
-| POST   | `/spotify/player/source`   | `{ "source": "<output name from the list>" }`  |
-| POST   | `/spotify/player/playlist` | `{ "playlistId": "<Spotify playlist id>" }`    |
-
-- **Capabilities come from Home Assistant's `supported_features`, never assumed.** Verified on the installed
-  Home Assistant: while Spotify has no active session the entity is `idle` and only exposes
-  `select_source`. Play/pause/next/previous/`play_media` and `browse_media` (answers `not_supported`) appear
-  only once an output is active. A command that is not offered is refused with `422 unsupported_action`
-  before anything is sent.
-- **Outputs** are the entity's `source_list` (Spotify Connect devices currently available: phone, computer,
-  TV, Echo...). Choosing one that is not listed returns `409 device_unavailable`. Control is not restricted
-  to Echo.
-- **Accepted vs confirmed.** The result is `confirmed` only when the expected state was observed within a few
-  seconds; otherwise `accepted` (Home Assistant took it, Spotify did not confirm yet).
-- **No Alexa fallback** and no retry/wake loops.
-- Calls to Home Assistant appear in the existing diagnostics (observed Home Control -> Home Assistant calls,
-  not Home Assistant -> Spotify requests).
-- **Direct connection from #17 is kept for reading playlists only**: Home Assistant cannot browse them while
-  idle. It performs no playback calls. Playing a playlist goes through Home Assistant `play_media`
-  (`spotify:playlist:<id>`), which also requires an active output.
-
-**Player page (`/music`, "Música" in the navigation).** Now playing, previous/play-pause/next, the list of
-available outputs and the playlists with a "Tocar" button. Every control is enabled only when the
-capabilities above allow it, and each part has its own loading, empty and error state. The page refreshes
-`GET /spotify/player` every 5 seconds while visible; that reads one Home Assistant entity and never calls
-Spotify, so there is no duplicate Spotify polling. Ajustes > Spotify keeps only the account connection and
-links to the player. The direct connection (#17) is retained solely to list playlists.
-
-**Validation status.** Verified against the real Home Assistant (read-only): entity discovery, outputs
-(`MacBook Pro de Vinicius`, `Todo lugar`, `echo show`), idle capabilities, and honest refusals of
-next/playlist/unknown output. **Not yet verified:** real play, pause, skip, output selection and playlist
-start, because they act on your devices and need an active Spotify session. Open Spotify on a device, then
-try the controls in **Ajustes > Spotify** and record the result in the pull request.
-
 ## Set it up from the app (about 5 minutes)
 
 You do not need to edit `.env`: everything is done in **Ajustes > Spotify**.
@@ -239,7 +183,7 @@ You do not need to edit `.env`: everything is done in **Ajustes > Spotify**.
 | Dispositivos | The devices request fails                                           | Same causes as above; "no devices" is ok but explained    |
 
 A revoked authorization marks the connection as needing reconnection (the card then offers
-**Conectar de novo**) and leaves Home Assistant and its Spotify integration untouched.
+**Conectar de novo**).
 
 ### Environment variables (still supported)
 

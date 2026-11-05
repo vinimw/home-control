@@ -57,21 +57,22 @@ step still runs. `POST /scenes/:id/run` answers `200` with:
 A failed step is never reported as success. The most recent run is stored with the scene (`lastRun`). A
 scene that is already running answers `409 conflict`.
 
-## Preset scenes (Cinema, Boa noite, Música)
+## Preset scenes (Cinema, Boa noite)
 
-Ready-made starting points built only from what the connected TV, Echo and Spotify support right now.
+Ready-made starting points built only from what the connected TV and Echo support right now.
 They are **installed on request** (nothing is created automatically) and become ordinary scenes, so they are
 fully editable (`PATCH /scenes/:id`) and removable.
 
-| Method | Path                           | Description                                                           |
-| ------ | ------------------------------ | --------------------------------------------------------------------- |
-| GET    | `/scenes/presets`              | Each template with its steps resolved to real devices, or why not     |
-| POST   | `/scenes/presets/:key/install` | `cinema`, `good_night` or `music`; `201` with the scene and `omitted` |
+| Method | Path                           | Description                                                       |
+| ------ | ------------------------------ | ----------------------------------------------------------------- |
+| GET    | `/scenes/presets`              | Each template with its steps resolved to real devices, or why not |
+| POST   | `/scenes/presets/:key/install` | `cinema` or `good_night`; `201` with the scene and `omitted`      |
 
-- **Cinema:** TV on, TV volume 20%. **Boa noite:** TV off, pause Spotify, pause Echo.
-  **Música:** play Spotify on the active output, Echo volume 30%.
+- **Cinema:** TV on, TV volume 20%. **Boa noite:** TV off, pause Echo. There is no Spotify step: Spotify is
+  controlled only on the Music page, through the direct connection (a scene step is always a device
+  command).
 - A step is included only if the device is available **and** advertises the command at that moment. Others
-  are left out and listed in `omitted` with the reason (for example Spotify cannot pause while idle). A
+  are left out and listed in `omitted` with the reason (for example the Echo cannot pause while idle). A
   missing or unsupported device never blocks the scene; if nothing is available the install answers
   `409 device_unavailable` and creates nothing.
 - Installing a name that already exists answers `409 conflict`; the existing scene is untouched.

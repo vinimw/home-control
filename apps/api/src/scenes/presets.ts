@@ -1,6 +1,6 @@
 import type { Device, ScenePreset, ScenePresetKey, ScenePresetStep } from '@home-control/shared';
 
-type Role = 'tv' | 'spotify' | 'echo';
+type Role = 'tv' | 'echo';
 
 interface TemplateStep {
   label: string;
@@ -34,35 +34,19 @@ export const TEMPLATES: readonly Template[] = [
   {
     key: 'good_night',
     name: 'Boa noite',
-    description: 'Desliga a TV e pausa a música.',
+    description: 'Desliga a TV e pausa o Echo.',
     steps: [
       { label: 'Desligar a TV', role: 'tv', command: 'turn_off' },
-      { label: 'Pausar o Spotify', role: 'spotify', command: 'pause' },
       { label: 'Pausar o Echo', role: 'echo', command: 'pause' },
-    ],
-  },
-  {
-    key: 'music',
-    name: 'Música',
-    description: 'Retoma o Spotify na saída ativa e ajusta o volume do Echo.',
-    steps: [
-      { label: 'Tocar no Spotify', role: 'spotify', command: 'play' },
-      {
-        label: 'Volume do Echo em 30%',
-        role: 'echo',
-        command: 'set_volume',
-        params: { level: 30 },
-      },
     ],
   },
 ];
 
-const ROLE_LABEL: Record<Role, string> = { tv: 'a TV', spotify: 'o Spotify', echo: 'o Echo' };
+const ROLE_LABEL: Record<Role, string> = { tv: 'a TV', echo: 'o Echo' };
 
 function deviceFor(role: Role, devices: readonly Device[]): Device | undefined {
   const usable = devices.filter((d) => d.availability !== 'unavailable');
   if (role === 'tv') return usable.find((d) => d.type === 'tv');
-  if (role === 'spotify') return usable.find((d) => /^spotify/i.test(d.sourceName));
   return usable.find((d) => d.type === 'speaker' && /echo/i.test(d.sourceName));
 }
 

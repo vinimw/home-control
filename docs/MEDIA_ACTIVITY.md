@@ -1,11 +1,11 @@
 # Media activity in the header
 
-A compact control in the header shows what is playing on the **Echo (Alexa)**, the **Spotify** account or the
-**Samsung TV**, with quick controls. Tap it for the full list of sources.
+A compact control in the header shows what is playing on the **Echo (Alexa)** or the **Samsung TV**, with quick controls. Spotify is not
+part of it: it lives on the Music page, through the direct Spotify connection. Tap it for the full list of sources.
 
 ## What you see
 
-- **Echo / Spotify:** track title and artist (when reported), state (Tocando, Pausado...) and
+- **Echo:** track title and artist (when reported), state (Tocando, Pausado...) and
   anterior / play-pause / próxima.
 - **TV:** the current app or input and whether it is on. Play/pause when the TV offers it and a
   **Controle remoto** shortcut to the existing remote screen. **The TV does not report the content title**,
@@ -23,7 +23,7 @@ Automatic rule: the **most recently changed source in use**, where "in use" is a
 **or a TV that is on** (a TV being watched is shown even when music is merely paused); otherwise the most
 recent paused one. You can pick **Mostrar no topo** for another source (kept for the browser
 session). The other sources always stay reachable in the panel, so using the Echo and the TV together never
-hides one of them. Echo and Spotify often show the same track (the Echo is the Spotify output).
+hides one of them.
 
 ## How it works
 
@@ -37,11 +37,10 @@ history and confirmed the same way.
 
 ## Technical discovery (checked against the real Home Assistant)
 
-| Source            | Reports                                                               | Commands offered         |
-| ----------------- | --------------------------------------------------------------------- | ------------------------ |
-| Echo Show (Alexa) | State, title, artist, album while a session exists                    | play, pause, prev, next  |
-| Spotify           | State, title, artist (same session as the Echo when it is the output) | play, pause, prev, next  |
-| Samsung TV        | On/off, `source`/app (e.g. YouTube). `media_title` is the app name    | play, pause, turn on/off |
+| Source            | Reports                                                            | Commands offered         |
+| ----------------- | ------------------------------------------------------------------ | ------------------------ |
+| Echo Show (Alexa) | State, title, artist, album while a session exists                 | play, pause, prev, next  |
+| Samsung TV        | On/off, `source`/app (e.g. YouTube). `media_title` is the app name | play, pause, turn on/off |
 
 - Alexa's playback state and track **are** readable through the Home Assistant Alexa media player, but only
   what that integration exposes; nothing here depends on an unsupported Alexa API.

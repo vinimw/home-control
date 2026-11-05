@@ -454,6 +454,8 @@ export function classifyEntity(
   if (typeof entityId !== 'string' || !entityId.includes('.')) return null;
   const domain = entityId.split('.')[0] as string;
   if (!SUPPORTED_DOMAINS.has(domain)) return null;
+  // Spotify is controlled only through the direct Spotify integration, never as a Home Assistant device.
+  if (domain === 'media_player' && entityId.startsWith('media_player.spotify')) return null;
 
   const { entity, device, areas } = context;
   if (entity?.disabled_by || entity?.hidden_by || entity?.entity_category) return null;

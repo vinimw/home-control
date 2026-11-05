@@ -5,7 +5,7 @@ always-on Mac**, separately from this repository. It is **not** part of `compose
 only runs the `web` and `api` services, and the API reaches Home Assistant over the local network.
 
 ```
-Docker (web + api)  ──── LAN ────►  Home Assistant OS (VM on the Mac)  ──►  TV · Echo Show · Spotify
+Docker (web + api)  ──── LAN ────►  Home Assistant OS (VM on the Mac)  ──►  TV · Echo Show
 ```
 
 ## 1. Prerequisites

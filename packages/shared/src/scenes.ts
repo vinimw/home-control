@@ -55,7 +55,7 @@ export interface SceneListResponse {
   scenes: Scene[];
 }
 
-export const SCENE_PRESET_KEYS = ['cinema', 'good_night', 'music'] as const;
+export const SCENE_PRESET_KEYS = ['cinema', 'good_night'] as const;
 export type ScenePresetKey = (typeof SCENE_PRESET_KEYS)[number];
 
 /** A template step as it resolves today: it is `available` only if the device and command exist right now. */

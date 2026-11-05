@@ -102,9 +102,9 @@ scripts/restore.sh backups/home-control-20261105-004535   # asks for confirmatio
 
 - [ ] `scripts/smoke.sh` ends in READY.
 - [ ] The app opens from a phone on the home Wi-Fi and asks for the login.
-- [ ] Início/Dispositivos list the TV, the Echo and Spotify as available.
+- [ ] Início/Dispositivos list the TV and the Echo as available.
 - [ ] The TV: mute then unmute (or volume up/down) is confirmed in the app and visible on the TV.
-- [ ] Música: the player shows the Spotify outputs; play/pause works once an output is active.
+- [ ] Música: the player shows the current track and the Spotify outputs; play/pause works once an output is active (the account must be connected in Ajustes > Spotify).
 - [ ] Cenas: run a harmless scene; every step shows its own result.
 - [ ] From mobile data (Wi-Fi off) the app is **not** reachable (no public port).
 - [ ] `scripts/backup.sh` finishes with "backup verified".
